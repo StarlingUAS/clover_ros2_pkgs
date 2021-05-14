@@ -14,7 +14,7 @@ from led_msgs.srv import SetLED, SetLEDs
 class LEDController(Node):
     def __init__(self):
         super().__init__('led')
-        self.led_count = self.get_parameter_or('~led_count', 30).get_parameter_value()
+        self.led_count = self.get_parameter_or('~led_count', 30)
         self.state_pub = self.create_publisher(LEDStateArray, '~state')
 
         self.state = LEDStateArray([LEDState(index=index) for index in range(self.led_count)])
