@@ -15,7 +15,7 @@ class LEDController(Node):
     def __init__(self):
         super().__init__('led')
         self.led_count = self.get_parameter_or('~led_count', 30)
-        self.state_pub = self.create_publisher(LEDStateArray, '~state')
+        self.state_pub = self.create_publisher(LEDStateArray, '~state', 10)
 
         self.state = LEDStateArray([LEDState(index=index) for index in range(self.led_count)])
 
