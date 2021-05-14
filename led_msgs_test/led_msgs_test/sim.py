@@ -15,12 +15,12 @@ class LEDController(Node):
     def __init__(self):
         super().__init__('led')
         self.led_count = self.get_parameter_or('~led_count', 30)
-        self.state_pub = self.create_publisher(LEDStateArray, '~state', 10)
+        self.state_pub = self.create_publisher(LEDStateArray, 'state', 10)
 
         self.state = LEDStateArray([LEDState(index=index) for index in range(self.led_count)])
 
-        self.set_led_srv = self.create_service(SetLED, '~set_led', self.set_led)
-        self.set_leds_srv = self.create_service(SetLEDs, '~set_leds', self.set_leds)
+        self.set_led_srv = self.create_service(SetLED, 'set_led', self.set_led)
+        self.set_leds_srv = self.create_service(SetLEDs, 'set_leds', self.set_leds)
 
     def set_led(self, req):
         self.state.leds[req.index].r = int(req.r)
