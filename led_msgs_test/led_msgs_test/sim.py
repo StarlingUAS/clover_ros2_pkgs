@@ -5,7 +5,7 @@
 
 import sys
 import rclpy
-from rclpy.Node import Node
+from rclpy.node import Node
 
 from led_msgs.msg import LEDState, LEDStateArray
 from led_msgs.srv import SetLED, SetLEDs
