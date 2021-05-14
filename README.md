@@ -11,6 +11,7 @@ This is a ROS2 port of the libraries written by CopterExpress for use with the C
 - **led_msgs**: the led_msgs from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
 - **led_msgs_test**: Python ROS2 testing for led_msgs from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
 - **ws281x**: led drivers ros2 nodes from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2 
+- **ws281x_test** test package for ws281x drivers
 
 ## Clover ROS2
 
