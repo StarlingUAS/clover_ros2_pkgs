@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'sim = led_msgs.sim:main'
+            'sim = led_msgs_test.sim:main'
         ],
     },
 )
