@@ -6,6 +6,14 @@ import time
 from led_msgs.srv import SetLEDs
 from led_msgs.msg import LEDStateArray, LEDState
 
+def gen_led_state(i, r, g, b):
+    s = LEDState()
+    s.index = i
+    s.r = r
+    s.g = g
+    s.b = b
+    return s
+
 class WS281XTest(Node):
 
     def __init__(self):
@@ -15,8 +23,8 @@ class WS281XTest(Node):
         self.set_leds = self.create_client(SetLEDs, '/set_leds')
 
     def fill_strip(self, red, green, blue):
-        req = SetLEDs()
-        req.leds = [LEDState(i, red, green, blue) for i in range(self.led_count)]
+        req = SetLEDs.Request()
+        req.leds = [gen_led_state(i, red, green, blue) for i in range(self.led_count)]
         return self.set_leds.call_async(req) # returns a future object
 
 def main(args=None):
