@@ -1,5 +1,6 @@
+<?xml version="1.0"?>
 <launch>
-    <node pkg="ws281x" name="led" type="ws281x_node" clear_params="true" output="screen">
+    <node pkg="ws281x" name="led" exec="ws281x_node" output="screen">
         <param name="led_count" value="30"/>
         <param name="gpio_pin" value="21"/>
         <param name="brightness" value="255"/>
