@@ -23,23 +23,25 @@ class LEDController(Node):
         self.set_led_srv = self.create_service(SetLED, 'set_led', self.set_led)
         self.set_leds_srv = self.create_service(SetLEDs, 'set_leds', self.set_leds)
 
-    def set_led(self, req):
+    def set_led(self, req, resp):
         self.state.leds[req.index].r = int(req.r)
         self.state.leds[req.index].g = int(req.g)
         self.state.leds[req.index].b = int(req.b)
         self.print_led()
         self.state_pub.publish(self.state)
-        return {'success': True}
+        resp.success = True
+        return resp
 
 
-    def set_leds(self, req):
+    def set_leds(self, req, resp):
         for led in req.leds:
             self.state.leds[led.index].r = int(led.r)
             self.state.leds[led.index].g = int(led.g)
             self.state.leds[led.index].b = int(led.b)
         self.print_led()
         self.state_pub.publish(self.state)
-        return {'success': True}
+        resp.success = True
+        return resp
 
     def print_led(self):
         s = ''
