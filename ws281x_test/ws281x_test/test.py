@@ -12,7 +12,7 @@ class WS281XTest(Node):
         super().__init__('ws281x_test')
 
         self.led_count = self.get_parameter_or('led_count', 30)
-        self.set_leds = self.create_client(SetLEDs, 'set_leds')
+        self.set_leds = self.create_client(SetLEDs, '/set_leds')
 
     def fill_strip(self, red, green, blue):
         req = SetLEDs()
