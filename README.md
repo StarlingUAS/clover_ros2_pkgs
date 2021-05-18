@@ -15,9 +15,31 @@ This is a ROS2 port of the libraries written by CopterExpress for use with the C
 
 ## Clover ROS2
 
-[In PROGRESS]
+This is a port of some of the core source files of the clover packages. We only port the files which are relevant to the sensor. We do not need the control node as that is handled by mavros for us.
 
+### *clover_led* Node
+This node controls higher level and more complex functionality of the led lights. It exposes the `set_effect` service which takes a clover `setEffect` message. 
 
+```
+string effect
+uint8 r
+uint8 g
+uint8 b
+---
+bool success
+string message
+```
+
+where the `effect` parameter can be one of the following:
+
+- `fill`: block fill colours
+- `blink`: blink colour at a `blink_rate` parameter
+- `blink_fast`: blink colour at a `blink_fast_rate` parameter
+- `fade`: performs a fade from current colour to next colour at a `fade_period` parameter
+- `wipe`: performs a wipe from current colour to next colour at a `wipe_period` parameter 
+- `flash`: flashes the colour `flash_number` amount of times with `flash_period` time inbetween. Then returns to previous effect if fill, fade or wipe 
+- `rainbow_fill`: fills the leds with rainbow
+- `rainbow`: fills the led with rainbow
 ## LED Control
 
 ### Custom LED ROS messages (led_msgs package)

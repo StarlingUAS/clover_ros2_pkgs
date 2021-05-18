@@ -35,6 +35,7 @@ class CloverLEDController : public rclcpp::Node
         std::chrono::nanoseconds blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
         double low_battery_threshold;
         bool blink_state;
+		int flash_number;
         std::shared_ptr<led_msgs::srv::SetLEDs::Request> set_leds;
         std::shared_ptr<led_msgs::msg::LEDStateArray> state, start_state;
 
@@ -44,6 +45,8 @@ class CloverLEDController : public rclcpp::Node
 
         //mavros_msgs::State mavros_state;
         int counter;
+
+		void restartTimer(double seconds);
 };
 
 CloverLEDController::CloverLEDController() : Node("led")
@@ -54,6 +57,7 @@ CloverLEDController::CloverLEDController() : Node("led")
 	this->get_parameter_or("fade_period",fade_period, 0.5);
 	this->get_parameter_or("wipe_period",wipe_period, 0.5);
 	this->get_parameter_or("flash_delay",flash_delay, 0.1);
+	this->get_parameter_or("flash_number",this->flash_number, 3);
 	this->get_parameter_or("rainbow_period",rainbow_period, 5.0);
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
 
@@ -79,8 +83,20 @@ CloverLEDController::CloverLEDController() : Node("led")
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)
     );
 
+	this->restartTimer(0.0);
+	// this->timer = this->create_wall_timer(
+	// 	0s, std::bind(&CloverLEDController::proceed, this));
+}
+
+void CloverLEDController::restartTimer(double seconds) 
+{
+	if (this->timer) {
+		this->timer->cancel();
+	}
 	this->timer = this->create_wall_timer(
-		0s, std::bind(&CloverLEDController::proceed, this));
+		std::chrono::duration<double>(seconds), 
+		std::bind(&CloverLEDController::proceed, this)
+	);
 }
 
 void CloverLEDController::callSetLeds()
@@ -220,38 +236,24 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		this->fill(req->r, req->g, req->b);
 
 	} else if (req->effect == "blink") {
-		// timer.setPeriod(ros::Duration(1 / blink_rate), true);
-		// timer.start();
+		this->restartTimer(1.0/this->blink_rate.count());
 
 	} else if (req->effect == "blink_fast") {
-		// timer.setPeriod(ros::Duration(1 / blink_fast_rate), true);
-		// timer.start();
+		this->restartTimer(1.0/this->blink_fast_rate.count());
 
 	} else if (req->effect == "fade") {
-		// timer.setPeriod(ros::Duration(0.05), true);
-		// timer.start();
+		this->restartTimer(0.05);
 
 	} else if (req->effect == "wipe") {
-		// timer.setPeriod(ros::Duration(wipe_period / led_count), true);
-		// timer.start();
+		this->restartTimer((double) this->wipe_period.count()/(double) this->led_count);
 
 	} else if (req->effect == "flash") {
-		// rclcpp::Duration delay(this->flash_delay);
-		this->fill(0, 0, 0);
-        rclcpp::sleep_for(this->flash_delay);
-		// delay.sleep();
-		this->fill(req->r, req->g, req->b);
-        rclcpp::sleep_for(this->flash_delay);
-		// delay.sleep();
-		this->fill(0, 0, 0);
-        rclcpp::sleep_for(this->flash_delay);
-		// delay.sleep();
-		// this->fill(req->r, req->g, req->b);
-        rclcpp::sleep_for(this->flash_delay);
-		// delay.sleep();
-		this->fill(0, 0, 0);
-        rclcpp::sleep_for(this->flash_delay);
-		// delay.sleep();
+		for(int i = 0; i < this->flash_number; i++){
+			this->fill(req->r, req->g, req->b);
+			rclcpp::sleep_for(this->flash_delay);
+			this->fill(0, 0, 0);
+			rclcpp::sleep_for(this->flash_delay);
+		}
 		if (this->current_effect->effect == "fill"||
 		    this->current_effect->effect == "fade" ||
 		    this->current_effect->effect == "wipe") {
@@ -264,12 +266,10 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		return true; // this effect happens only once
 
 	} else if (req->effect == "rainbow_fill") {
-		// timer.setPeriod(ros::Duration(rainbow_period / 255), true);
-		// timer.start();
+		this->restartTimer((double) this->rainbow_period.count()/255.0);
 
 	} else if (req->effect == "rainbow") {
-		// timer.setPeriod(ros::Duration(rainbow_period / 255), true);
-		// timer.start();
+		this->restartTimer((double) this->rainbow_period.count()/255.0);
 
 	} else {
 		res->message = "Unknown effect: " + req->effect + ". Available effects are fill, fade, wipe, blink, blink_fast, flash, rainbow, rainbow_fill.";
