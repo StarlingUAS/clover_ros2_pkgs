@@ -28,6 +28,7 @@
   <depend>visualization_msgs</depend>
   <depend>led_msgs</depend>
   <depend>rosgraph_msgs</depend>
+  <depend>ws281x</depend>
   <!-- <depend>mavros</depend> -->
   <!-- <depend>mavros_extras</depend> -->
 
