@@ -20,7 +20,7 @@ class CloverLEDController : public rclcpp::Node
         void callSetLeds();
         void rainbow(uint8_t n, uint8_t& r, uint8_t& g, uint8_t& b);
         void fill(uint8_t r, uint8_t g, uint8_t b);
-        // void proceed(const ros::TimerEvent& event);
+        void proceed();
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
         // void notify(const std::string& event);
@@ -29,9 +29,10 @@ class CloverLEDController : public rclcpp::Node
     private:
         std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
         int led_count;
-        // ros::Timer timer;
-        // ros::Time start_time;
-        std::chrono::seconds blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
+		rclcpp::TimerBase::SharedPtr timer;
+		rclcpp::Time start_time;
+
+        std::chrono::nanoseconds blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
         double low_battery_threshold;
         bool blink_state;
         std::shared_ptr<led_msgs::srv::SetLEDs::Request> set_leds;
@@ -56,12 +57,13 @@ CloverLEDController::CloverLEDController() : Node("led")
 	this->get_parameter_or("rainbow_period",rainbow_period, 5.0);
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
 
-    this->blink_rate =      std::chrono::nanoseconds(blink_rate * 1000);
-    this->blink_fast_rate = std::chrono::nanoseconds(blink_fast_rate * 1000);
-    this->fade_period =     std::chrono::nanoseconds(fade_period * 1000);
-    this->wipe_period =     std::chrono::nanoseconds(wipe_period * 1000);
-    this->flash_delay =     std::chrono::nanoseconds(flash_delay * 1000);
-    this->rainbow_period =  std::chrono::nanoseconds(rainbow_period * 1000);
+	// Cast rate parameters to nanoseconds
+    this->blink_rate =      std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(blink_rate));
+    this->blink_fast_rate = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(blink_fast_rate));
+    this->fade_period =     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(fade_period));
+    this->wipe_period =     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(wipe_period));
+    this->flash_delay = 	std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(flash_delay));
+    this->rainbow_period =  std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(rainbow_period));
     
     // First need to wait for service
     // ros::service::waitForService("set_leds"); // cannot work without set_leds service
@@ -76,6 +78,9 @@ CloverLEDController::CloverLEDController() : Node("led")
         "set_effect",
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)
     );
+
+	this->timer = this->create_wall_timer(
+		0s, std::bind(&CloverLEDController::proceed, this));
 }
 
 void CloverLEDController::callSetLeds()
@@ -125,6 +130,77 @@ void CloverLEDController::handleState(const led_msgs::msg::LEDStateArray::Shared
     this->state = msg;
     this->led_count = this->state->leds.size();
 }
+
+void CloverLEDController::proceed()
+{
+	this->counter++;
+	uint8_t r, g, b;
+	this->set_leds->leds.clear();
+	this->set_leds->leds.resize(led_count);
+
+	if (this->current_effect->effect == "blink" || this->current_effect->effect == "blink_fast") {
+		this->blink_state = !this->blink_state;
+		// toggle all leds
+		if (this->blink_state) {
+			this->fill(this->current_effect->r, this->current_effect->g, this->current_effect->b);
+		} else {
+			this->fill(0, 0, 0);
+		}
+
+	} 
+	else if (this->current_effect->effect == "fade") {
+	// 	// fade all leds from starting state
+		double time_elapsed = (double) (this->now() - this->start_time).nanoseconds();
+		double passed = std::min( time_elapsed / this->fade_period.count(), 1.0);
+		double one_minus_passed = 1 - passed;
+		for (int i = 0; i < this->led_count; i++) {
+			this->set_leds->leds[i].index = i;
+			this->set_leds->leds[i].r = one_minus_passed * this->start_state->leds[i].r + passed * this->current_effect->r;
+			this->set_leds->leds[i].g = one_minus_passed * this->start_state->leds[i].g + passed * this->current_effect->g;
+			this->set_leds->leds[i].b = one_minus_passed * this->start_state->leds[i].b + passed * this->current_effect->b;
+		}
+		this->callSetLeds();
+		if (passed >= 1.0) {
+			// fade finished
+			this->timer->cancel();
+		}
+	} 
+	else if (this->current_effect->effect == "wipe") {
+		this->set_leds->leds.resize(1);
+		this->set_leds->leds[0].index = this->counter - 1;
+		this->set_leds->leds[0].r = this->current_effect->r;
+		this->set_leds->leds[0].g = this->current_effect->g;
+		this->set_leds->leds[0].b = this->current_effect->b;
+		this->callSetLeds();
+		if (this->counter == this->led_count) {
+			// wipe finished
+			this->timer->cancel();
+		}
+
+	} 
+	else if (this->current_effect->effect == "rainbow_fill") {
+		this->rainbow(this->counter % 255, r, g, b);
+		for (int i = 0; i < this->led_count; i++) {
+			this->set_leds->leds[i].index = i;
+			this->set_leds->leds[i].r = r;
+			this->set_leds->leds[i].g = g;
+			this->set_leds->leds[i].b = b;
+		}
+		this->callSetLeds();
+	}
+	else if (this->current_effect->effect == "rainbow") {
+		for (int i = 0; i < this->led_count; i++) {
+			int pos = (int)round(this->counter + (255.0 * i / this->led_count)) % 255;
+			this->rainbow(pos % 255, r, g, b);
+			this->set_leds->leds[i].index = i;
+			this->set_leds->leds[i].r = r;
+			this->set_leds->leds[i].g = g;
+			this->set_leds->leds[i].b = b;
+		}
+		this->callSetLeds();
+	}
+}
+
 
 bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res)
 {
@@ -206,10 +282,12 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 	this->current_effect = req;
 	this->counter = 0;
 	this->start_state = this->state;
-	// this->start_time = ros::Time::now();
+	this->start_time = this->now();
 
 	return true;
 }
+
+
 
 int main(int argc, char **argv)
 {
