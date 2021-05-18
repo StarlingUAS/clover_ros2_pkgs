@@ -62,6 +62,12 @@ if(BUILD_TESTING)
 endif()
 
 
+# Install launch files.
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 install(TARGETS
   clover_led
   DESTINATION lib/{PROJECT_NAME}
