@@ -43,10 +43,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 ament_export_dependencies(rosidl_default_runtime)
 
 
-add_executable(clover_led src/led.cpp)
-ament_target_dependencies(clover_led 
+add_executable(led src/led.cpp)
+ament_target_dependencies(led 
   rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs)
-rosidl_target_interfaces(clover_led ${PROJECT_NAME} "rosidl_typesupport_cpp")
+rosidl_target_interfaces(led ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 
 
@@ -69,8 +69,8 @@ install(DIRECTORY
 )
 
 install(TARGETS
-  clover_led
-  DESTINATION lib/{PROJECT_NAME}
+  led
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()
