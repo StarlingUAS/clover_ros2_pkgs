@@ -119,12 +119,16 @@ void CloverLEDController::callSetLeds()
 {
     RCLCPP_INFO(this->get_logger(), "Sending LED Call request");
 	auto res = this->set_leds_srv->async_send_request(this->set_leds);
-    if (res.wait_for(15s) != std::future_status::ready)
-    {
-		RCLCPP_WARN(this->get_logger(), "Calling set_leds failed");//, this->set_leds->message.c_str());
-	} else {
-        RCLCPP_INFO(this->get_logger(), "Succesfully called leds");
-    }
+	std::future_status status;
+	do {
+		status = res.wait_for(15s);
+		if(status == std::future_status::timeout) {
+			RCLCPP_WARN(this->get_logger(), "Calling set_leds failed and timed out");//, this->set_leds->message.c_str());
+			return;
+		}
+	} while (status != std::future_status::ready);
+	auto result = res.get();
+	RCLCPP_INFO(this->get_logger(), "Succesfully called leds, return %i, message %s", result->success, result->message);
 }
 
 void CloverLEDController::rainbow(uint8_t n, uint8_t& r, uint8_t& g, uint8_t& b)
