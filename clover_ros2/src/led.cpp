@@ -51,6 +51,7 @@ class CloverLEDController : public rclcpp::Node
 
 CloverLEDController::CloverLEDController() : Node("led")
 {
+    RCLCPP_INFO(this->get_logger(), "Constructor Initialisation");
     double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
     this->get_parameter_or("blink_rate",blink_rate, 2.0);
 	this->get_parameter_or("blink_fast_rate",blink_fast_rate, blink_rate * 2);
@@ -69,23 +70,27 @@ CloverLEDController::CloverLEDController() : Node("led")
     this->flash_delay = 	std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(flash_delay));
     this->rainbow_period =  std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(rainbow_period));
     
+    RCLCPP_INFO(this->get_logger(), "Set Parameters");
+
     // First need to wait for service
     // ros::service::waitForService("set_leds"); // cannot work without set_leds service
     this->set_leds_srv = this->create_client<led_msgs::srv::SetLEDs>("set_leds");
-    this->set_leds_srv->wait_for_service(1s);
+    this->set_leds_srv->wait_for_service(10s);
 
     this->state_sub = this->create_subscription<led_msgs::msg::LEDStateArray>(
-        "State", 10,
+        "state", 10,
         std::bind(&CloverLEDController::handleState, this, std::placeholders::_1)
     );
     this->set_effect = this->create_service<clover_ros2::srv::SetLEDEffect>(
         "set_effect",
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)
     );
+    RCLCPP_INFO(this->get_logger(), "Create Service");
 
-	this->restartTimer(0.0);
+	this->restartTimer(1.0);
 	// this->timer = this->create_wall_timer(
 	// 	0s, std::bind(&CloverLEDController::proceed, this));
+    RCLCPP_INFO(this->get_logger(), "End Constructor");
 }
 
 void CloverLEDController::restartTimer(double seconds) 
@@ -97,10 +102,12 @@ void CloverLEDController::restartTimer(double seconds)
 		std::chrono::duration<double>(seconds), 
 		std::bind(&CloverLEDController::proceed, this)
 	);
+    RCLCPP_INFO(this->get_logger(), "Reset Timer to %f", seconds);
 }
 
 void CloverLEDController::callSetLeds()
 {
+    RCLCPP_INFO(this->get_logger(), "Sending LED Call request");
 	auto res = this->set_leds_srv->async_send_request(this->set_leds);
     if (res.wait_for(15s) != std::future_status::ready)
     {
@@ -145,16 +152,20 @@ void CloverLEDController::handleState(const led_msgs::msg::LEDStateArray::Shared
 {
     this->state = msg;
     this->led_count = this->state->leds.size();
+    RCLCPP_INFO(this->get_logger(), "Handling received state %d", this->led_count);
 }
 
 void CloverLEDController::proceed()
 {
+	RCLCPP_INFO(this->get_logger(), "In Proceed");
 	this->counter++;
 	uint8_t r, g, b;
 	this->set_leds->leds.clear();
-	this->set_leds->leds.resize(led_count);
+	this->set_leds->leds.resize(this->led_count);
+	RCLCPP_INFO(this->get_logger(), "Clearing LEDs");
 
 	if (this->current_effect->effect == "blink" || this->current_effect->effect == "blink_fast") {
+		RCLCPP_INFO(this->get_logger(), "blinking");
 		this->blink_state = !this->blink_state;
 		// toggle all leds
 		if (this->blink_state) {
@@ -165,6 +176,7 @@ void CloverLEDController::proceed()
 
 	} 
 	else if (this->current_effect->effect == "fade") {
+		RCLCPP_INFO(this->get_logger(), "fade");
 	// 	// fade all leds from starting state
 		double time_elapsed = (double) (this->now() - this->start_time).nanoseconds();
 		double passed = std::min( time_elapsed / this->fade_period.count(), 1.0);
@@ -182,6 +194,7 @@ void CloverLEDController::proceed()
 		}
 	} 
 	else if (this->current_effect->effect == "wipe") {
+		RCLCPP_INFO(this->get_logger(), "wipe");
 		this->set_leds->leds.resize(1);
 		this->set_leds->leds[0].index = this->counter - 1;
 		this->set_leds->leds[0].r = this->current_effect->r;
@@ -195,6 +208,7 @@ void CloverLEDController::proceed()
 
 	} 
 	else if (this->current_effect->effect == "rainbow_fill") {
+		RCLCPP_INFO(this->get_logger(), "rainbow");
 		this->rainbow(this->counter % 255, r, g, b);
 		for (int i = 0; i < this->led_count; i++) {
 			this->set_leds->leds[i].index = i;
@@ -215,6 +229,7 @@ void CloverLEDController::proceed()
 		}
 		this->callSetLeds();
 	}
+	RCLCPP_INFO(this->get_logger(), "End of proceed");
 }
 
 
