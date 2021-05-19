@@ -83,6 +83,8 @@ class LEDControl : public rclcpp::Node
 		int param_led_count;
 		bool param_invert;
 		int param_brightness;
+
+		rclcpp::TimerBase::SharedPtr publish_led_state_timer;
 };
 
 LEDControl::LEDControl() : Node("ws281x")
