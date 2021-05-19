@@ -162,20 +162,18 @@ void CloverLEDController::handleState(const led_msgs::msg::LEDStateArray::Shared
 {
     this->state = msg;
     this->led_count = this->state->leds.size();
-    RCLCPP_INFO(this->get_logger(), "Handling received state %d", this->led_count);
+    RCLCPP_INFO(this->get_logger(), "Handling received led state with %d leds", this->led_count);
 }
 
 void CloverLEDController::proceed()
 {
-	RCLCPP_INFO(this->get_logger(), "In Proceed");
 	this->counter++;
 	uint8_t r, g, b;
 	this->set_leds->leds.clear();
 	this->set_leds->leds.resize(this->led_count);
-	RCLCPP_INFO(this->get_logger(), "Clearing LEDs");
 
 	if (this->current_effect->effect == "blink" || this->current_effect->effect == "blink_fast") {
-		RCLCPP_INFO(this->get_logger(), "blinking");
+		RCLCPP_INFO(this->get_logger(), "proceed: blinking");
 		this->blink_state = !this->blink_state;
 		// toggle all leds
 		if (this->blink_state) {
@@ -186,7 +184,7 @@ void CloverLEDController::proceed()
 
 	} 
 	else if (this->current_effect->effect == "fade") {
-		RCLCPP_INFO(this->get_logger(), "fade");
+		RCLCPP_INFO(this->get_logger(), "proceed: fade");
 	// 	// fade all leds from starting state
 		double time_elapsed = (double) (this->now() - this->start_time).nanoseconds();
 		double passed = std::min( time_elapsed / this->fade_period.count(), 1.0);
@@ -204,7 +202,7 @@ void CloverLEDController::proceed()
 		}
 	} 
 	else if (this->current_effect->effect == "wipe") {
-		RCLCPP_INFO(this->get_logger(), "wipe");
+		RCLCPP_INFO(this->get_logger(), "proceed: wipe");
 		this->set_leds->leds.resize(1);
 		this->set_leds->leds[0].index = this->counter - 1;
 		this->set_leds->leds[0].r = this->current_effect->r;
@@ -218,7 +216,7 @@ void CloverLEDController::proceed()
 
 	} 
 	else if (this->current_effect->effect == "rainbow_fill") {
-		RCLCPP_INFO(this->get_logger(), "rainbow1");
+		RCLCPP_INFO(this->get_logger(), "proceed: rainbow_fill");
 		this->rainbow(this->counter % 255, r, g, b);
 		for (int i = 0; i < this->led_count; i++) {
 			this->set_leds->leds[i].index = i;
@@ -229,7 +227,7 @@ void CloverLEDController::proceed()
 		this->callSetLeds();
 	}
 	else if (this->current_effect->effect == "rainbow") {
-		RCLCPP_INFO(this->get_logger(), "rainbow2");
+		RCLCPP_INFO(this->get_logger(), "proceed: rainbow");
 		for (int i = 0; i < this->led_count; i++) {
 			int pos = (int)round(this->counter + (255.0 * i / this->led_count)) % 255;
 			this->rainbow(pos % 255, r, g, b);
@@ -240,13 +238,14 @@ void CloverLEDController::proceed()
 		}
 		this->callSetLeds();
 	}
-	RCLCPP_INFO(this->get_logger(), "End of proceed");
 }
 
 
 bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res)
 {
     res->success = true;
+
+	RCLCPP_INFO(this->get_logger(), "Received Set request for effect: %s", req->effect);
 
 	if (req->effect == "") {
 		req->effect = "fill";
