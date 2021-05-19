@@ -72,6 +72,9 @@ CloverLEDController::CloverLEDController() : Node("led")
     
     RCLCPP_INFO(this->get_logger(), "Set Parameters");
 
+	// Initialise set leds
+	this->set_leds = std::make_shared<led_msgs::srv::SetLEDs::Request>();
+
     // First need to wait for service
     // ros::service::waitForService("set_leds"); // cannot work without set_leds service
     this->set_leds_srv = this->create_client<led_msgs::srv::SetLEDs>("set_leds");
