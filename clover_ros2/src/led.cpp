@@ -32,7 +32,7 @@ class CloverLEDController : public rclcpp::Node
 		rclcpp::TimerBase::SharedPtr timer;
 		rclcpp::Time start_time;
 
-        std::chrono::nanoseconds blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
+        double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
         double low_battery_threshold;
         bool blink_state;
 		int flash_number;
@@ -52,23 +52,23 @@ class CloverLEDController : public rclcpp::Node
 CloverLEDController::CloverLEDController() : Node("led")
 {
     RCLCPP_INFO(this->get_logger(), "Constructor Initialisation");
-    double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
-    this->get_parameter_or("blink_rate",blink_rate, 2.0);
-	this->get_parameter_or("blink_fast_rate",blink_fast_rate, blink_rate * 2);
-	this->get_parameter_or("fade_period",fade_period, 0.5);
-	this->get_parameter_or("wipe_period",wipe_period, 0.5);
-	this->get_parameter_or("flash_delay",flash_delay, 0.1);
+    // double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
+    this->get_parameter_or("blink_rate",this->blink_rate, 2.0);
+	this->get_parameter_or("blink_fast_rate",this->blink_fast_rate, blink_rate * 2);
+	this->get_parameter_or("fade_period",this->fade_period, 0.5);
+	this->get_parameter_or("wipe_period",this->wipe_period, 0.5);
+	this->get_parameter_or("flash_delay",this->flash_delay, 0.1);
 	this->get_parameter_or("flash_number",this->flash_number, 3);
-	this->get_parameter_or("rainbow_period",rainbow_period, 5.0);
+	this->get_parameter_or("rainbow_period",this->rainbow_period, 5.0);
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
 
 	// Cast rate parameters to nanoseconds
-    this->blink_rate =      std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(blink_rate));
-    this->blink_fast_rate = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(blink_fast_rate));
-    this->fade_period =     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(fade_period));
-    this->wipe_period =     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(wipe_period));
-    this->flash_delay = 	std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(flash_delay));
-    this->rainbow_period =  std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(rainbow_period));
+    // this->blink_rate =      std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(blink_rate));
+    // this->blink_fast_rate = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(blink_fast_rate));
+    // this->fade_period =     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(fade_period));
+    // this->wipe_period =     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(wipe_period));
+    // this->flash_delay = 	std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(flash_delay));
+    // this->rainbow_period =  std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(rainbow_period));
     
     RCLCPP_INFO(this->get_logger(), "Set Parameters");
 
@@ -181,7 +181,7 @@ void CloverLEDController::proceed()
 		RCLCPP_INFO(this->get_logger(), "proceed: fade");
 	// 	// fade all leds from starting state
 		double time_elapsed = (double) (this->now() - this->start_time).nanoseconds();
-		double passed = std::min( time_elapsed / this->fade_period.count(), 1.0);
+		double passed = std::min( time_elapsed / this->fade_period, 1.0);
 		double one_minus_passed = 1 - passed;
 		for (int i = 0; i < this->led_count; i++) {
 			this->set_leds->leds[i].index = i;
@@ -255,23 +255,24 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		this->fill(req->r, req->g, req->b);
 
 	} else if (req->effect == "blink") {
-		this->restartTimer(1.0/this->blink_rate.count());
+		this->restartTimer(1.0/this->blink_rate);
 
 	} else if (req->effect == "blink_fast") {
-		this->restartTimer(1.0/this->blink_fast_rate.count());
+		this->restartTimer(1.0/this->blink_fast_rate);
 
 	} else if (req->effect == "fade") {
 		this->restartTimer(0.05);
 
 	} else if (req->effect == "wipe") {
-		this->restartTimer((double) this->wipe_period.count()/(double) this->led_count);
+		this->restartTimer((double) this->wipe_period/(double) this->led_count);
 
 	} else if (req->effect == "flash") {
+		auto _flash_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(this->flash_delay));
 		for(int i = 0; i < this->flash_number; i++){
 			this->fill(req->r, req->g, req->b);
-			rclcpp::sleep_for(this->flash_delay);
+			rclcpp::sleep_for(_flash_delay);
 			this->fill(0, 0, 0);
-			rclcpp::sleep_for(this->flash_delay);
+			rclcpp::sleep_for(_flash_delay);
 		}
 		if (this->current_effect->effect == "fill"||
 		    this->current_effect->effect == "fade" ||
@@ -285,10 +286,10 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		return true; // this effect happens only once
 
 	} else if (req->effect == "rainbow_fill") {
-		this->restartTimer((double) this->rainbow_period.count()/255.0);
+		this->restartTimer(this->rainbow_period/255.0);
 
 	} else if (req->effect == "rainbow") {
-		this->restartTimer((double) this->rainbow_period.count()/255.0);
+		this->restartTimer(this->rainbow_period/255.0);
 
 	} else {
 		res->message = "Unknown effect: " + req->effect + ". Available effects are fill, fade, wipe, blink, blink_fast, flash, rainbow, rainbow_fill.";
