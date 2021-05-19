@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+
+    <arg name="led" default="true"/>
+
+    <!-- flag that we are operating on a simulated drone -->
+    <arg name="simulator" default="false"/> 
+
+    <!-- led strip -->
+    <include file="$(find-pkg-share clover_ros2)/launch/led.launch.xml" if="$(var led)">
+        <arg name="simulator" value="$(var simulator)"/>
+    </include>
+
+</launch>

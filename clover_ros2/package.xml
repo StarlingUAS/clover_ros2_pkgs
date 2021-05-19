@@ -29,7 +29,7 @@
   <depend>led_msgs</depend>
   <depend>rosgraph_msgs</depend>
   <depend>ws281x</depend>
-  <!-- <depend>mavros</depend> -->
+  <depend>mavros_msgs</depend>
   <!-- <depend>mavros_extras</depend> -->
 
   <test_depend>ament_lint_auto</test_depend>

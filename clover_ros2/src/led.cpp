@@ -1,6 +1,6 @@
 #include <chrono>
 #include <memory>
-// #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "rclcpp/rclcpp.hpp"
 #include "clover_ros2/srv/set_led_effect.hpp"
@@ -9,7 +9,7 @@
 #include "led_msgs/msg/led_state_array.hpp"
 
 // #include "sensor_msgs/msg/battery_state.h"
-//#include "mavros_msgs/msg/State.h"
+#include "mavros_msgs/msg/state.hpp"
 
 using namespace std::chrono_literals;
 
@@ -23,8 +23,8 @@ class CloverLEDController : public rclcpp::Node
         void proceed();
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
-        // void notify(const std::string& event);
-        // void handleMavrosState(const mavros_msgs::State& msg);
+        void notify(const std::string& event);
+        void handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg);
 
     private:
         std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
@@ -43,7 +43,7 @@ class CloverLEDController : public rclcpp::Node
         rclcpp::Subscription<led_msgs::msg::LEDStateArray>::SharedPtr state_sub;
         rclcpp::Service<clover_ros2::srv::SetLEDEffect>::SharedPtr set_effect;
 
-        //mavros_msgs::State mavros_state;
+        std::shared_ptr<mavros_msgs::msg::State> mavros_state;
         int counter;
 
 		void restartTimer(double seconds);
@@ -66,7 +66,7 @@ CloverLEDController::CloverLEDController() : Node("led")
 	this->start_state = std::make_shared<led_msgs::msg::LEDStateArray>();
 	this->set_leds = std::make_shared<led_msgs::srv::SetLEDs::Request>();
 	this->current_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-	this->current_effect->effect = "None";
+	this->current_effect->effect = "";
 	this->current_effect->r = 0;
 	this->current_effect->g = 0;
 	this->current_effect->b = 0;
@@ -226,7 +226,11 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 {
     res->success = true;
 
-	RCLCPP_INFO(this->get_logger(), "Received led set request for effect: %s", req->effect.c_str());
+	RCLCPP_INFO(
+		this->get_logger(), 
+		"Received led set request for effect: %s (r%i, g%i, b%i)", 
+		req->effect.c_str(), req->r, req->g, req->b
+	);
 
 	if (req->effect == "") {
 		req->effect = "fill";
@@ -294,7 +298,52 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 	return true;
 }
 
+void CloverLEDController::notify(const std::string& event)
+{	
+	if (this->has_parameter("notify/" + event + "/effect") ||
+	    this->has_parameter("notify/" + event + "/r") ||
+	    this->has_parameter("notify/" + event + "/g") ||
+	    this->has_parameter("notify/" + event + "/b")) {
+		RCLCPP_INFO(this->get_logger(), "led: notify %s", event.c_str());
+		auto effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+		std::string eff;
+		int r, g, b;
+		this->get_parameter_or("notify/" + event + "/effect", eff, std::string(""));
+		this->get_parameter_or("notify/" + event + "/r", r, 0);
+		this->get_parameter_or("notify/" + event + "/g", g, 0);
+		this->get_parameter_or("notify/" + event + "/b", b, 0);
+		effect->effect = eff;
+		effect->r = r;
+		effect->g = g;
+		effect->b = b;
+		this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
+	}
+}
 
+void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
+{
+	if (msg->connected && !this->mavros_state->connected) {
+		notify("connected");
+	} else if (!msg->connected && this->mavros_state->connected) {
+		notify("disconnected");
+	} else if (msg->armed && !this->mavros_state->armed) {
+		notify("armed");
+	} else if (!msg->armed && this->mavros_state->armed) {
+		notify("disarmed");
+	} else if (msg->mode != this->mavros_state->mode) {
+		// mode changed
+		std::string mode = boost::algorithm::to_lower_copy(msg->mode);
+		if (mode.find(".") != std::string::npos) {
+			// remove the part before "."
+			mode = mode.substr(mode.find(".") + 1);
+		}
+		// std::string err;
+		// if (ros::names::validate(mode, err)) {
+		this->notify(mode);
+		// }
+	}
+	this->mavros_state = msg;
+}
 
 int main(int argc, char **argv)
 {
