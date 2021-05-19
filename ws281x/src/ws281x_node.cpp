@@ -95,7 +95,7 @@ LEDControl::LEDControl() : Node("ws281x")
 
 	std::string strip_type_str;
 	this->get_parameter_or("strip_type", strip_type_str, std::string("WS2811_STRIP_GBR"));
-	this->get_parameter_or("led_count", this->param_led_count, 30);
+	this->get_parameter_or("led_count", this->param_led_count, 72);
 	this->get_parameter_or("invert", this->param_invert, false);
 	this->get_parameter_or("brightness", this->param_brightness, 255);
 
