@@ -73,7 +73,14 @@ CloverLEDController::CloverLEDController() : Node("led")
     RCLCPP_INFO(this->get_logger(), "Set Parameters");
 
 	// Initialise set leds
+	this->state = std::make_shared<led_msgs::msg::LEDStateArray>();
+	this->start_state = std::make_shared<led_msgs::msg::LEDStateArray>();
 	this->set_leds = std::make_shared<led_msgs::srv::SetLEDs::Request>();
+	this->current_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+	this->current_effect->effect = "None";
+	this->current_effect->r = 0;
+	this->current_effect->g = 0;
+	this->current_effect->b = 0;
 
     // First need to wait for service
     // ros::service::waitForService("set_leds"); // cannot work without set_leds service
@@ -211,7 +218,7 @@ void CloverLEDController::proceed()
 
 	} 
 	else if (this->current_effect->effect == "rainbow_fill") {
-		RCLCPP_INFO(this->get_logger(), "rainbow");
+		RCLCPP_INFO(this->get_logger(), "rainbow1");
 		this->rainbow(this->counter % 255, r, g, b);
 		for (int i = 0; i < this->led_count; i++) {
 			this->set_leds->leds[i].index = i;
@@ -222,6 +229,7 @@ void CloverLEDController::proceed()
 		this->callSetLeds();
 	}
 	else if (this->current_effect->effect == "rainbow") {
+		RCLCPP_INFO(this->get_logger(), "rainbow2");
 		for (int i = 0; i < this->led_count; i++) {
 			int pos = (int)round(this->counter + (255.0 * i / this->led_count)) % 255;
 			this->rainbow(pos % 255, r, g, b);
