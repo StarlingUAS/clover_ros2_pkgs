@@ -1,12 +1,44 @@
-notify: {
-  startup: { r: 255, g: 255, b: 255 },
-  connected: { effect: rainbow },
-  disconnected: { effect: blink, r: 255, g: 50, b: 50 },
-  acro: { r: 245, g: 155, b: 0 },
-  stabilized: { r: 30, g: 180, b: 50 },
-  altctl: { r: 255, g: 255, b: 40 },
-  posctl: { r: 50, g: 100, b: 220 },
-  offboard: { r: 220, g: 20, b: 250 },
-  low_battery: { threshold: 3.6, effect: blink_fast, r: 255, g: 0, b: 0 },
-  error: { effect: flash, r: 255, g: 0, b: 0 },
-}
+--- 
+notify: 
+  acro: 
+    b: 0
+    g: 155
+    r: 245
+  altctl: 
+    b: 40
+    g: 255
+    r: 255
+  connected: 
+    effect: rainbow
+  disconnected: 
+    b: 50
+    effect: blink
+    g: 50
+    r: 255
+  error: 
+    b: 0
+    effect: flash
+    g: 0
+    r: 255
+  low_battery: 
+    b: 0
+    effect: blink_fast
+    g: 0
+    r: 255
+    threshold: 3.6
+  offboard: 
+    b: 250
+    g: 20
+    r: 220
+  posctl: 
+    b: 220
+    g: 100
+    r: 50
+  stabilized: 
+    b: 50
+    g: 180
+    r: 30
+  startup: 
+    b: 255
+    g: 255
+    r: 255
