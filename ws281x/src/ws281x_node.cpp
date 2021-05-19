@@ -154,7 +154,7 @@ LEDControl::LEDControl() : Node("ws281x")
 	this->led_state_pub = this->create_publisher<led_msgs::msg::LEDStateArray>("state", 1);
 
 	this->publish_led_state_timer = this->create_wall_timer(
-		1s,
+		0.5s,
 		std::bind(&LEDControl::publishLedState, this)
 	);
 	// this->publishLedState();
@@ -212,7 +212,8 @@ bool LEDControl::setLeds(const std::shared_ptr<led_msgs::srv::SetLEDs::Request> 
 		resp->success = true;
 		resp->message = "";
 	}
-	this->publishLedState();
+	RCLCPP_INFO(this->get_logger(), "End of set LEDs function");
+	// this->publishLedState();
 	return true;
 }
 

@@ -167,7 +167,7 @@ void CloverLEDController::handleState(const led_msgs::msg::LEDStateArray::Shared
 {
     this->state = msg;
     this->led_count = this->state->leds.size();
-    RCLCPP_INFO(this->get_logger(), "Handling received led state with %d leds", this->led_count);
+    // RCLCPP_INFO(this->get_logger(), "Handling received led state with %d leds", this->led_count);
 }
 
 void CloverLEDController::proceed()
