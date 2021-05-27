@@ -43,6 +43,7 @@ class CloverLEDController : public rclcpp::Node
         rclcpp::Subscription<led_msgs::msg::LEDStateArray>::SharedPtr state_sub;
         rclcpp::Service<clover_ros2::srv::SetLEDEffect>::SharedPtr set_effect;
 
+		rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr mavros_state_sub;
         std::shared_ptr<mavros_msgs::msg::State> mavros_state;
         int counter;
 
@@ -51,6 +52,7 @@ class CloverLEDController : public rclcpp::Node
 
 CloverLEDController::CloverLEDController() : Node("led")
 {
+	this->get_node_options().automatically_declare_parameters_from_overrides();
     // double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
     this->get_parameter_or("blink_rate",this->blink_rate, 2.0);
 	this->get_parameter_or("blink_fast_rate",this->blink_fast_rate, blink_rate * 2);
@@ -77,9 +79,13 @@ CloverLEDController::CloverLEDController() : Node("led")
     this->set_leds_srv->wait_for_service(10s);
 
     this->state_sub = this->create_subscription<led_msgs::msg::LEDStateArray>(
-        "state", 10,
+        "led_state", 10,
         std::bind(&CloverLEDController::handleState, this, std::placeholders::_1)
     );
+	this->mavros_state_sub = this->create_subscription<mavros_msgs::msg::State>(
+		"mavros/state", 10,
+		std::bind(&CloverLEDController::handleMavrosState, this, std::placeholders::_1)
+	);
     this->set_effect = this->create_service<clover_ros2::srv::SetLEDEffect>(
         "set_effect",
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)

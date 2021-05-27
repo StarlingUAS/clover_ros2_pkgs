@@ -151,7 +151,7 @@ LEDControl::LEDControl() : Node("ws281x")
 		std::bind(&LEDControl::setLeds, this, std::placeholders::_1, std::placeholders::_2)
 	);
 
-	this->led_state_pub = this->create_publisher<led_msgs::msg::LEDStateArray>("state", 1);
+	this->led_state_pub = this->create_publisher<led_msgs::msg::LEDStateArray>("led_state", 1);
 
 	this->publish_led_state_timer = this->create_wall_timer(
 		0.5s,
