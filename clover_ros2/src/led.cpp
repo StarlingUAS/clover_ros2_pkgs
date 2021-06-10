@@ -50,10 +50,17 @@ class CloverLEDController : public rclcpp::Node
 		void restartTimer(double seconds);
 };
 
-CloverLEDController::CloverLEDController() : Node("led")
+CloverLEDController::CloverLEDController(
+	const std::string& name = "led",
+	const rclcpp::NodeOptions& options = (
+		rclcpp::NodeOprtions()
+			.allow_undeclared_parameters(true)
+			.automatically_declare_parameters_from_overrides(true)
+	)
+) : Node(name, options)
 {
-	this->get_node_options().allow_undeclared_parameters(true);
-	this->get_node_options().automatically_declare_parameters_from_overrides(true);
+	// this->get_node_options().allow_undeclared_parameters(true);
+	// this->get_node_options().automatically_declare_parameters_from_overrides(true);
     // double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
     this->get_parameter_or("blink_rate",this->blink_rate, 2.0);
 	this->get_parameter_or("blink_fast_rate",this->blink_fast_rate, blink_rate * 2);
