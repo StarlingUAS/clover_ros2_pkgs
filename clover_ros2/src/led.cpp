@@ -52,8 +52,8 @@ class CloverLEDController : public rclcpp::Node
 
 CloverLEDController::CloverLEDController() : Node("led")
 {
-	this->get_node_options().allow_undeclared_parameters();
-	this->get_node_options().automatically_declare_parameters_from_overrides();
+	this->get_node_options().allow_undeclared_parameters(true);
+	this->get_node_options().automatically_declare_parameters_from_overrides(true);
     // double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
     this->get_parameter_or("blink_rate",this->blink_rate, 2.0);
 	this->get_parameter_or("blink_fast_rate",this->blink_fast_rate, blink_rate * 2);
