@@ -53,7 +53,7 @@ class CloverLEDController : public rclcpp::Node
 CloverLEDController::CloverLEDController(
 	const std::string& name = "led",
 	const rclcpp::NodeOptions& options = (
-		rclcpp::NodeOprtions()
+		rclcpp::NodeOptions()
 			.allow_undeclared_parameters(true)
 			.automatically_declare_parameters_from_overrides(true)
 	)
