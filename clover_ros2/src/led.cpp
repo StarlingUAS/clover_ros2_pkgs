@@ -50,14 +50,13 @@ class CloverLEDController : public rclcpp::Node
 		void restartTimer(double seconds);
 };
 
-CloverLEDController::CloverLEDController(
-	const std::string& name = "led",
-	const rclcpp::NodeOptions& options = (
-		rclcpp::NodeOptions()
+CloverLEDController::CloverLEDController() : 
+	Node("led", 
+		 "",
+		 rclcpp::NodeOptions()
 			.allow_undeclared_parameters(true)
 			.automatically_declare_parameters_from_overrides(true)
 	)
-) : Node(name, options)
 {
 	// this->get_node_options().allow_undeclared_parameters(true);
 	// this->get_node_options().automatically_declare_parameters_from_overrides(true);
