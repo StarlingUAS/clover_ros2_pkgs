@@ -37,7 +37,7 @@ class CloverLEDController : public rclcpp::Node
         bool blink_state;
 		int flash_number;
         std::shared_ptr<led_msgs::srv::SetLEDs::Request> set_leds;
-`        std::shared_ptr<led_msgs::msg::LEDStateArray> state, start_state;
+        std::shared_ptr<led_msgs::msg::LEDStateArray> state, start_state;
 
         rclcpp::Client<led_msgs::srv::SetLEDs>::SharedPtr set_leds_srv;
         rclcpp::Subscription<led_msgs::msg::LEDStateArray>::SharedPtr state_sub;
