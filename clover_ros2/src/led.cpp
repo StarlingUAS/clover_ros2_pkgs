@@ -37,7 +37,7 @@ class CloverLEDController : public rclcpp::Node
         bool blink_state;
 		int flash_number;
         std::shared_ptr<led_msgs::srv::SetLEDs::Request> set_leds;
-        std::shared_ptr<led_msgs::msg::LEDStateArray> state, start_state;
+`        std::shared_ptr<led_msgs::msg::LEDStateArray> state, start_state;
 
         rclcpp::Client<led_msgs::srv::SetLEDs>::SharedPtr set_leds_srv;
         rclcpp::Subscription<led_msgs::msg::LEDStateArray>::SharedPtr state_sub;
@@ -335,27 +335,27 @@ void CloverLEDController::notify(const std::string& event)
 
 void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
 {
-	if (msg->connected && !this->mavros_state->connected) {
-		notify("connected");
-	} else if (!msg->connected && this->mavros_state->connected) {
-		notify("disconnected");
-	} else if (msg->armed && !this->mavros_state->armed) {
-		notify("armed");
-	} else if (!msg->armed && this->mavros_state->armed) {
-		notify("disarmed");
-	} else if (msg->mode != this->mavros_state->mode) {
-		// mode changed
-		std::string mode = boost::algorithm::to_lower_copy(msg->mode);
-		if (mode.find(".") != std::string::npos) {
-			// remove the part before "."
-			mode = mode.substr(mode.find(".") + 1);
-		}
-		// std::string err;
-		// if (ros::names::validate(mode, err)) {
-		this->notify(mode);
-		// }
-	}
-	this->mavros_state = msg;
+	// if (msg->connected && !this->mavros_state->connected) {
+	// 	notify("connected");
+	// } else if (!msg->connected && this->mavros_state->connected) {
+	// 	notify("disconnected");
+	// } else if (msg->armed && !this->mavros_state->armed) {
+	// 	notify("armed");
+	// } else if (!msg->armed && this->mavros_state->armed) {
+	// 	notify("disarmed");
+	// } else if (msg->mode != this->mavros_state->mode) {
+	// 	// mode changed
+	// 	std::string mode = boost::algorithm::to_lower_copy(msg->mode);
+	// 	if (mode.find(".") != std::string::npos) {
+	// 		// remove the part before "."
+	// 		mode = mode.substr(mode.find(".") + 1);
+	// 	}
+	// 	// std::string err;
+	// 	// if (ros::names::validate(mode, err)) {
+	// 	this->notify(mode);
+	// 	// }
+	// }
+	// this->mavros_state = msg;
 }
 
 int main(int argc, char **argv)
