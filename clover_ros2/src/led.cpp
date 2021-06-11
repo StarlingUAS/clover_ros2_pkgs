@@ -313,6 +313,7 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 void CloverLEDController::notify(const std::string& event)
 {	
+	RCLCPP_INFO(this->get_logger(), "Notify: %s", event.c_str());
 	// if (this->has_parameter("notify/" + event + "/effect") ||
 	//     this->has_parameter("notify/" + event + "/r") ||
 	//     this->has_parameter("notify/" + event + "/g") ||
@@ -335,14 +336,15 @@ void CloverLEDController::notify(const std::string& event)
 
 void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
 {
-	// if (msg->connected && !this->mavros_state->connected) {
-	// 	notify("connected");
-	// } else if (!msg->connected && this->mavros_state->connected) {
-	// 	notify("disconnected");
-	// } else if (msg->armed && !this->mavros_state->armed) {
-	// 	notify("armed");
-	// } else if (!msg->armed && this->mavros_state->armed) {
-	// 	notify("disarmed");
+	if (msg->connected && !this->mavros_state->connected) {
+		notify("connected");
+	} else if (!msg->connected && this->mavros_state->connected) {
+		notify("disconnected");
+	} else if (msg->armed && !this->mavros_state->armed) {
+		notify("armed");
+	} else if (!msg->armed && this->mavros_state->armed) {
+		notify("disarmed");
+	}
 	// } else if (msg->mode != this->mavros_state->mode) {
 	// 	// mode changed
 	// 	std::string mode = boost::algorithm::to_lower_copy(msg->mode);
@@ -355,7 +357,7 @@ void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::Share
 	// 	this->notify(mode);
 	// 	// }
 	// }
-	// this->mavros_state = msg;
+	this->mavros_state = msg;
 }
 
 int main(int argc, char **argv)
