@@ -313,24 +313,24 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 void CloverLEDController::notify(const std::string& event)
 {	
-	if (this->has_parameter("notify/" + event + "/effect") ||
-	    this->has_parameter("notify/" + event + "/r") ||
-	    this->has_parameter("notify/" + event + "/g") ||
-	    this->has_parameter("notify/" + event + "/b")) {
-		RCLCPP_INFO(this->get_logger(), "led: notify %s", event.c_str());
-		auto effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-		std::string eff;
-		int r, g, b;
-		this->get_parameter_or("notify/" + event + "/effect", eff, std::string(""));
-		this->get_parameter_or("notify/" + event + "/r", r, 0);
-		this->get_parameter_or("notify/" + event + "/g", g, 0);
-		this->get_parameter_or("notify/" + event + "/b", b, 0);
-		effect->effect = eff;
-		effect->r = r;
-		effect->g = g;
-		effect->b = b;
-		this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
-	}
+	// if (this->has_parameter("notify/" + event + "/effect") ||
+	//     this->has_parameter("notify/" + event + "/r") ||
+	//     this->has_parameter("notify/" + event + "/g") ||
+	//     this->has_parameter("notify/" + event + "/b")) {
+	// 	RCLCPP_INFO(this->get_logger(), "led: notify %s", event.c_str());
+	// 	auto effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+	// 	std::string eff;
+	// 	int r, g, b;
+	// 	this->get_parameter_or("notify/" + event + "/effect", eff, std::string(""));
+	// 	this->get_parameter_or("notify/" + event + "/r", r, 0);
+	// 	this->get_parameter_or("notify/" + event + "/g", g, 0);
+	// 	this->get_parameter_or("notify/" + event + "/b", b, 0);
+	// 	effect->effect = eff;
+	// 	effect->r = r;
+	// 	effect->g = g;
+	// 	effect->b = b;
+	// 	this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
+	// }
 }
 
 void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
