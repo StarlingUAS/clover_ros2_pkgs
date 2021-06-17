@@ -27,6 +27,6 @@
         <param name="fade_period" value="0.5"/>
         <param name="rainbow_period" value="5.0"/>
         <!-- events effects table -->
-        <param from="$(find-pkg-share clover_ros2)/config/notify_params.yaml"/>
+        <!-- <param from="$(find-pkg-share clover_ros2)/config/notify_params.yaml"/> -->
     </node>
 </launch>

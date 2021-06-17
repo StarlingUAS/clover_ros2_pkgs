@@ -22,6 +22,7 @@ class CloverLEDController : public rclcpp::Node
         void fill(uint8_t r, uint8_t g, uint8_t b);
         void proceed();
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
+		void setEffectRaw(std::string eff, int r, int g, int b);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
         void notify(const std::string& event);
         void handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg);
@@ -311,27 +312,44 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 	return true;
 }
 
+void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r)
+{
+	auto effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+	effect->effect = eff;
+	effect->r = r;
+	effect->g = g;
+	effect->b = b;
+	this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
+}
+
 void CloverLEDController::notify(const std::string& event)
 {	
-	RCLCPP_INFO(this->get_logger(), "Notify: %s", event.c_str());
-	// if (this->has_parameter("notify/" + event + "/effect") ||
-	//     this->has_parameter("notify/" + event + "/r") ||
-	//     this->has_parameter("notify/" + event + "/g") ||
-	//     this->has_parameter("notify/" + event + "/b")) {
-	// 	RCLCPP_INFO(this->get_logger(), "led: notify %s", event.c_str());
-	// 	auto effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-	// 	std::string eff;
-	// 	int r, g, b;
-	// 	this->get_parameter_or("notify/" + event + "/effect", eff, std::string(""));
-	// 	this->get_parameter_or("notify/" + event + "/r", r, 0);
-	// 	this->get_parameter_or("notify/" + event + "/g", g, 0);
-	// 	this->get_parameter_or("notify/" + event + "/b", b, 0);
-	// 	effect->effect = eff;
-	// 	effect->r = r;
-	// 	effect->g = g;
-	// 	effect->b = b;
-	// 	this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
-	// }
+	RCLCPP_INFO(this->get_logger(), "led: notify: %s", event.c_str());
+	if (event == "armed") {
+		this->setEffectRaw("fade", 0, 0, 255);
+	} else if (event == "disarmed") {
+		this->setEffectRaw("fade", 0, 255, 0);
+	} else if (event == "acro") {
+		this->setEffectRaw("", 0, 155, 245);
+	} else if (event == "altctl") {
+		this->setEffectRaw("", 40, 255, 255);
+	} else if (event == "connected") {
+		this->setEffectRaw("rainbow", 0, 0, 0);
+	} else if (event == "disconnected") {
+		this->setEffectRaw("blink", 50, 50, 255);
+	} else if (event == "error") {
+		this->setEffectRaw("flash", 0, 0, 255);
+	} else if (event == "low_battery") {
+		this->setEffectRaw("blink_fast", 0, 0, 255);
+	} else if (event == "offbroad") {
+		this->setEffectRaw("", 255, 20, 220);
+	} else if (event == "posctl") {
+		this->setEffectRaw("", 220, 100, 50);
+	} else if (event == "stabilized") {
+		this->setEffectRaw("", 50, 180, 30);
+	} else if (event == "startup") {
+		this->setEffectRaw("", 255, 255, 255);
+	}
 }
 
 void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
@@ -344,19 +362,18 @@ void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::Share
 		notify("armed");
 	} else if (!msg->armed && this->mavros_state->armed) {
 		notify("disarmed");
+	} else if (msg->mode != this->mavros_state->mode) {
+		// mode changed
+		std::string mode = boost::algorithm::to_lower_copy(msg->mode);
+		if (mode.find(".") != std::string::npos) {
+			// remove the part before "."
+			mode = mode.substr(mode.find(".") + 1);
+		}
+		// std::string err;
+		// if (ros::names::validate(mode, err)) {
+		this->notify(mode);
+		// }
 	}
-	// } else if (msg->mode != this->mavros_state->mode) {
-	// 	// mode changed
-	// 	std::string mode = boost::algorithm::to_lower_copy(msg->mode);
-	// 	if (mode.find(".") != std::string::npos) {
-	// 		// remove the part before "."
-	// 		mode = mode.substr(mode.find(".") + 1);
-	// 	}
-	// 	// std::string err;
-	// 	// if (ros::names::validate(mode, err)) {
-	// 	this->notify(mode);
-	// 	// }
-	// }
 	this->mavros_state = msg;
 }
 
