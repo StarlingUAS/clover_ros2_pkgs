@@ -354,6 +354,10 @@ void CloverLEDController::notify(const std::string& event)
 
 void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
 {
+	if (!this->mavros_state){
+		return;
+	}
+	
 	if (msg->connected && !this->mavros_state->connected) {
 		notify("connected");
 	} else if (!msg->connected && this->mavros_state->connected) {
