@@ -242,7 +242,7 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 	RCLCPP_INFO(
 		this->get_logger(), 
-		"Received led set request for effect: %s (r%i, g%i, b%i)", 
+		"Received led set request for effect: %s (r: %i, g: %i, b: %i)", 
 		req->effect.c_str(), req->r, req->g, req->b
 	);
 
@@ -324,7 +324,7 @@ void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r)
 
 void CloverLEDController::notify(const std::string& event)
 {	
-	RCLCPP_INFO(this->get_logger(), "led: notify: %s", event.c_str());
+	RCLCPP_INFO(this->get_logger(), "Notify called with event: %s", event.c_str());
 	if (event == "armed") {
 		this->setEffectRaw("fade", 0, 0, 255);
 	} else if (event == "disarmed") {
@@ -355,9 +355,10 @@ void CloverLEDController::notify(const std::string& event)
 void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
 {
 	if (!this->mavros_state){
+		this->mavros_state = msg;
 		return;
 	}
-	
+
 	if (msg->connected && !this->mavros_state->connected) {
 		notify("connected");
 	} else if (!msg->connected && this->mavros_state->connected) {
