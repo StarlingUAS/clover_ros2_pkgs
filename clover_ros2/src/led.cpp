@@ -99,7 +99,7 @@ CloverLEDController::CloverLEDController() :
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)
     );
 
-	this->restartTimer(1.0);
+	this->restartTimer(0.5);
 	// this->timer = this->create_wall_timer(
 	// 	0s, std::bind(&CloverLEDController::proceed, this));
 	RCLCPP_INFO(this->get_logger(), "LED Effects Controller Initialised");
@@ -328,7 +328,7 @@ void CloverLEDController::notify(const std::string& event)
 	if (event == "armed") {
 		this->setEffectRaw("fade", 0, 0, 255);
 	} else if (event == "disarmed") {
-		this->setEffectRaw("fade", 0, 255, 0);
+		this->setEffectRaw("fade", 0, 0, 0);
 	} else if (event == "acro") {
 		this->setEffectRaw("", 0, 155, 245);
 	} else if (event == "altctl") {
@@ -341,12 +341,14 @@ void CloverLEDController::notify(const std::string& event)
 		this->setEffectRaw("flash", 0, 0, 255);
 	} else if (event == "low_battery") {
 		this->setEffectRaw("blink_fast", 0, 0, 255);
-	} else if (event == "offbroad") {
-		this->setEffectRaw("", 255, 20, 220);
+	} else if (event == "offboard") {
+		this->setEffectRaw("wipe", 255, 20, 220);
+	} else if (event == "manual") {
+		this->setEffectRaw("wipe", 0, 0, 0);
 	} else if (event == "posctl") {
-		this->setEffectRaw("", 220, 100, 50);
+		this->setEffectRaw("wipe", 220, 100, 50);
 	} else if (event == "stabilized") {
-		this->setEffectRaw("", 50, 180, 30);
+		this->setEffectRaw("wipe", 50, 180, 30);
 	} else if (event == "startup") {
 		this->setEffectRaw("", 255, 255, 255);
 	}
