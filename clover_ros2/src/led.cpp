@@ -21,22 +21,29 @@ class CloverLEDController : public rclcpp::Node
         void rainbow(uint8_t n, uint8_t& r, uint8_t& g, uint8_t& b);
         void fill(uint8_t r, uint8_t g, uint8_t b);
         void proceed();
+		void endEffect();
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
-		void setEffectRaw(std::string eff, int r, int g, int b);
+		void setEffectRaw(std::string eff, int r, int g, int b, float duration=-1.0, bool notify=false);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
         void notify(const std::string& event);
         void handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg);
 
     private:
         std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
+		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> prev_effect;
+		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> notify_effect;
         int led_count;
 		rclcpp::TimerBase::SharedPtr timer;
+		rclcpp::TimerBase::SharedPtr effect_duration_timer;
 		rclcpp::Time start_time;
 
         double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
         double low_battery_threshold;
         bool blink_state;
 		int flash_number;
+
+		bool notify_state;
+
         std::shared_ptr<led_msgs::srv::SetLEDs::Request> set_leds;
         std::shared_ptr<led_msgs::msg::LEDStateArray> state, start_state;
 
@@ -49,6 +56,7 @@ class CloverLEDController : public rclcpp::Node
         int counter;
 
 		void restartTimer(double seconds);
+		void restartEffectDurationTimer(double seconds);
 };
 
 CloverLEDController::CloverLEDController() : 
@@ -80,6 +88,9 @@ CloverLEDController::CloverLEDController() :
 	this->current_effect->r = 0;
 	this->current_effect->g = 0;
 	this->current_effect->b = 0;
+
+	this->prev_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+	this->notify_state = false;
 
     // First need to wait for service
     // ros::service::waitForService("set_leds"); // cannot work without set_leds service
@@ -115,6 +126,17 @@ void CloverLEDController::restartTimer(double seconds)
 		std::bind(&CloverLEDController::proceed, this)
 	);
     RCLCPP_DEBUG(this->get_logger(), "Reset Timer to %f", seconds);
+}
+
+void CloverLEDController::restartEffectDurationTimer(double seconds)
+{
+	if (this->effect_duration_timer) {
+		this->effect_duration_timer->cancel();
+	}
+	this->effect_duration_timer = this->create_wall_timer(
+		std::chrono::duration<double>(seconds), 
+		std::bind(&CloverLEDController::endEffect, this)
+	);
 }
 
 void CloverLEDController::callSetLeds()
@@ -236,6 +258,18 @@ void CloverLEDController::proceed()
 	}
 }
 
+void CloverLEDController::endEffect()
+{
+	if(this->notify_state) {
+		// If notify effect ends, reset back to previous effect
+		this->notify_state = false;
+		this->setEffect(this->prev_effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
+	} else {
+		// If normal effect ends, then set to blank
+		this->setEffectRaw("fill", 0, 0, 0);
+	}
+}
+
 bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res)
 {
     res->success = true;
@@ -245,6 +279,10 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		"Received led set request for effect: %s (r: %i, g: %i, b: %i)", 
 		req->effect.c_str(), req->r, req->g, req->b
 	);
+
+	if(this->notify_state && !req->notify) {
+		return true; // If currently notifying, do not set effect until the notify effect has completed.
+	}
 
 	if (req->effect == "") {
 		req->effect = "fill";
@@ -303,6 +341,18 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		return false;
 	}
 
+	if(req->notify && !req->duration) {
+		req->duration = 2.0; // Notifications must always have a duration to ensure un-notication
+	}
+
+	if(req->duration) {
+		this->restartEffectDurationTimer(req->duration);
+	}
+
+	if(this->current_effect) {
+		this->prev_effect = this->current_effect;
+	}
+
 	// set current effect
 	this->current_effect = req;
 	this->counter = 0;
@@ -312,45 +362,52 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 	return true;
 }
 
-void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r)
+void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r, float duration, bool notify)
 {
 	auto effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
 	effect->effect = eff;
 	effect->r = r;
 	effect->g = g;
 	effect->b = b;
+	if(duration > 0.0) {
+		effect->duration = duration;
+	}
+	if(notify) {
+		effect->notify = notify;
+	}
 	this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
 }
 
 void CloverLEDController::notify(const std::string& event)
 {	
 	RCLCPP_INFO(this->get_logger(), "Notify called with event: %s", event.c_str());
+	this->notify_state = true;
 	if (event == "armed") {
-		this->setEffectRaw("fade", 0, 0, 255);
+		this->setEffectRaw("fade", 0, 0, 255, 2, true);
 	} else if (event == "disarmed") {
-		this->setEffectRaw("fade", 0, 0, 0);
+		this->setEffectRaw("fade", 0, 0, 0, 2, true);
 	} else if (event == "acro") {
-		this->setEffectRaw("", 0, 155, 245);
+		this->setEffectRaw("", 0, 155, 245, 2, true);
 	} else if (event == "altctl") {
-		this->setEffectRaw("", 40, 255, 255);
+		this->setEffectRaw("", 40, 255, 255, 2, true);
 	} else if (event == "connected") {
-		this->setEffectRaw("rainbow", 0, 0, 0);
+		this->setEffectRaw("rainbow", 0, 0, 0, 2, true);
 	} else if (event == "disconnected") {
-		this->setEffectRaw("blink", 50, 50, 255);
+		this->setEffectRaw("blink", 50, 50, 255, 2, true);
 	} else if (event == "error") {
-		this->setEffectRaw("flash", 0, 0, 255);
+		this->setEffectRaw("flash", 0, 0, 255, 2, true);
 	} else if (event == "low_battery") {
-		this->setEffectRaw("blink_fast", 0, 0, 255);
+		this->setEffectRaw("blink_fast", 0, 0, 255, 2, true);
 	} else if (event == "offboard") {
-		this->setEffectRaw("wipe", 255, 20, 220);
+		this->setEffectRaw("wipe", 255, 20, 220, 2, true);
 	} else if (event == "manual") {
-		this->setEffectRaw("wipe", 0, 0, 0);
+		this->setEffectRaw("wipe", 0, 0, 0, 2, true);
 	} else if (event == "posctl") {
-		this->setEffectRaw("wipe", 220, 100, 50);
+		this->setEffectRaw("wipe", 220, 100, 50, 2, true);
 	} else if (event == "stabilized") {
-		this->setEffectRaw("wipe", 50, 180, 30);
+		this->setEffectRaw("wipe", 50, 180, 30, 2, true);
 	} else if (event == "startup") {
-		this->setEffectRaw("", 255, 255, 255);
+		this->setEffectRaw("", 255, 255, 255, 2, true);
 	}
 }
 
