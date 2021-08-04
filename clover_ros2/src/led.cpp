@@ -158,7 +158,7 @@ void CloverLEDController::fill(uint8_t r, uint8_t g, uint8_t b)
 	this->set_leds->leds.resize(this->led_count);
 	for (int i = 0; i < led_count; i++) {
 		this->set_leds_index(
-			i, r, g, b, this->brightness
+			i, i, r, g, b
 		);
 	}
 	this->callSetLeds();
@@ -270,6 +270,10 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		"Received led set request for effect: %s (r: %i, g: %i, b: %i) brightness: %i", 
 		req->effect.c_str(), req->r, req->g, req->b, req->brightness
 	);
+
+	if (req->brightness) {
+		this->brightness = req->brightness;
+	}
 
 	if (req->effect == "") {
 		req->effect = "fill";
