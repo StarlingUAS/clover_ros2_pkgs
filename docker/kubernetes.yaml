@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: starling-clover-daemon
+  labels:
+    app: starling
+
+spec:
+  selector: 
+    matchLabels:
+      name: starling-clover-daemon
+
+  template:
+    metadata:
+      labels:
+        name: starling-clover-daemon
+
+    spec:
+      nodeSelector:
+        starling.dev/vehicle-type: clover-test  
+      
+      tolerations:
+      - key: "starling.dev/type"
+        operator: "Equal"
+        value: "vehicle"
+        effect: "NoSchedule"
+
+      hostNetwork: true
+      shareProcessNamespace: true
+      
+      containers:
+      - name: starling-clover
+        image: uobflightlabstarling/starling-clover-test
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /dev/gpiomem
+          name: rpi-gpio
+        - mountPath: /etc/starling/vehicle.config
+          name: vehicleconfig
+          readOnly: true
+      
+      volumes:
+      - name: rpi-gpio
+        hostPath:
+          path: /dev/gpiomem
+      - name: vehicleconfig
+        hostPath:
+          path: /etc/starling/vehicle.config
+          type: File
