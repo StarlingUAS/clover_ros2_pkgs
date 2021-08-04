@@ -200,6 +200,7 @@ bool LEDControl::setLeds(const std::shared_ptr<led_msgs::srv::SetLEDs::Request> 
 			LED_GREEN * int(led.g) +  // Green channel mask
 			LED_BLUE * int(led.b));  // Blue channel mask
 		this->led_string.channel[0].leds[led.index] = color;
+		this->led_string.channel[0].brightness = led.brightness;
 	}
 	ws2811_return_t ret;
 	if ((ret = ws2811_render(&(this->led_string))) != WS2811_SUCCESS) {
