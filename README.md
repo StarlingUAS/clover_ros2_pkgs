@@ -25,6 +25,9 @@ string effect
 uint8 r
 uint8 g
 uint8 b
+float32 duration
+bool notify
+uint8 brightness
 ---
 bool success
 string message
@@ -40,6 +43,17 @@ where the `effect` parameter can be one of the following:
 - `flash`: flashes the colour `flash_number` amount of times with `flash_period` time inbetween. Then returns to previous effect if fill, fade or wipe 
 - `rainbow_fill`: fills the leds with rainbow
 - `rainbow`: fills the led with rainbow
+
+The `duration` parameter is in seconds and details the length of time an effect should last. Not specifying this parameter, or setting to 0.0 gives indefinite duration to the effect
+
+The `brightness` parameter (0 - 255) details the overall brightness of the effect. Defaults to 70 if not specified.
+
+The `notify` parameter triggers the request as a notification. A notification will override the current effect with the notify effect for the duration specified. Once the duration is over, the previous effect will restart. By default, all notifies last 2 seconds and are set to maximum brightness unless otherwise specified.
+
+#### Mavros State
+
+This node automatically attempts to subscribe to the `mavros/state` topic. When a change in state (e.g. arm/disarm or mode) is detected, a notification of a given set of styles and colours is triggered. See the list of triggers in [`led.cpp`](clover_ros2/src/led.cpp#L416)
+
 ## LED Control
 
 ### Custom LED ROS messages (led_msgs package)
