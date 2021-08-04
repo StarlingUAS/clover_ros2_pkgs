@@ -4,6 +4,7 @@ uint8 g
 uint8 b
 float32 duration
 bool notify
+uint8 brightness
 ---
 bool success
 string message
