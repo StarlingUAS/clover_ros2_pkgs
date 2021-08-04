@@ -383,7 +383,7 @@ void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r, flo
 	effect->g = g;
 	effect->b = b;
 
-	effect->brightness = brightness
+	effect->brightness = brightness;
 
 	if(duration > 0.0) {
 		effect->duration = duration;
