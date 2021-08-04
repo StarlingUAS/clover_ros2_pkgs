@@ -269,7 +269,7 @@ void CloverLEDController::proceed()
 
 void CloverLEDController::endEffect()
 {
-	if(this->notify_state) {
+	if(this->notify_state && this->prev_effect) {
 		// If notify effect ends, reset back to previous effect
 		this->notify_state = false;
 		this->setEffect(this->prev_effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
@@ -277,6 +277,8 @@ void CloverLEDController::endEffect()
 		// If normal effect ends, then set to blank
 		this->setEffectRaw("fill", 0, 0, 0);
 	}
+	// End the timer at the end of the effect
+	this->effect_duration_timer->cancel();
 }
 
 bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res)
@@ -285,18 +287,23 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 	RCLCPP_INFO(
 		this->get_logger(), 
-		"Received led set request for effect: %s (r: %i, g: %i, b: %i) brightness: %i", 
-		req->effect.c_str(), req->r, req->g, req->b, req->brightness
+		"Received led set effect: %s (r: %i, g: %i, b: %i) brightness: %i, duration: %f, notify: %s", 
+		req->effect.c_str(), req->r, req->g, req->b, req->brightness, req->duration, req->notify ? "true" : "false"
 	);
 
 	if(this->notify_state && !req->notify) {
-		return true; // If currently notifying, do not set effect until the notify effect has completed.
+		// If currently notifying and a new non-notify request is sent, replace prev effect with the new effect
+		this->prev_effect = req; //
+		return true; // 
 	}
 
 	if (req->brightness) {
+		// Set led brightness to requested
 		this->brightness = req->brightness;
 	}
 
+	///////////////
+	// Process effect
 	if (req->effect == "") {
 		req->effect = "fill";
 	}
@@ -353,18 +360,30 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		res->success = false;
 		return false;
 	}
+	// finish processing effects request
+	///////////////
 
 	if(req->notify && !req->duration) {
-		req->duration = 2.0; // Notifications must always have a duration to ensure un-notication
+		// If notify and a duration is not specified
+		// Notifications must always have a duration to ensure un-notication
+		req->duration = 2.0; 
 	}
 
 	if(req->duration) {
+		// If a duration is specified, start the effect timer. 
 		this->restartEffectDurationTimer(req->duration);
 	}
 
-	if(this->current_effect) {
+	if(req->notify && !this->notify_state && this->current_effect) {
+		// If notify and currently not already notifying, save the current effect to return to
 		this->prev_effect = this->current_effect;
 	}
+
+	if (req->notify) {
+		// If request is a notify, set notify state
+		this->notify_state = true;
+	}
+
 
 	// set current effect
 	this->current_effect = req;
@@ -397,7 +416,6 @@ void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r, flo
 void CloverLEDController::notify(const std::string& event)
 {	
 	RCLCPP_INFO(this->get_logger(), "Notify called with event: %s", event.c_str());
-	this->notify_state = true;
 	if (event == "armed") {
 		this->setEffectRaw("fade", 0, 0, 255, 255, 2, true);
 	} else if (event == "disarmed") {
