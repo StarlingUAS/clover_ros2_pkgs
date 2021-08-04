@@ -224,10 +224,6 @@ void CloverLEDController::proceed()
 				one_minus_passed * this->start_state->leds[i].g + passed * this->current_effect->g,
 				one_minus_passed * this->start_state->leds[i].b + passed * this->current_effect->b
 			);
-			// this->set_leds->leds[i].index = i;
-			// this->set_leds->leds[i].r = one_minus_passed * this->start_state->leds[i].r + passed * this->current_effect->r;
-			// this->set_leds->leds[i].g = one_minus_passed * this->start_state->leds[i].g + passed * this->current_effect->g;
-			// this->set_leds->leds[i].b = one_minus_passed * this->start_state->leds[i].b + passed * this->current_effect->b;
 		}
 		this->callSetLeds();
 		if (passed >= 1.0) {
@@ -245,10 +241,6 @@ void CloverLEDController::proceed()
 			this->current_effect->g,
 			this->current_effect->b
 		);
-		// this->set_leds->leds[0].index = this->counter - 1;
-		// this->set_leds->leds[0].r = this->current_effect->r;
-		// this->set_leds->leds[0].g = this->current_effect->g;
-		// this->set_leds->leds[0].b = this->current_effect->b;
 		this->callSetLeds();
 		if (this->counter == this->led_count) {
 			// wipe finished
@@ -261,10 +253,6 @@ void CloverLEDController::proceed()
 		this->rainbow(this->counter % 255, r, g, b);
 		for (int i = 0; i < this->led_count; i++) {
 			this->set_leds_index(i,i,r,g,b);
-			// this->set_leds->leds[i].index = i;
-			// this->set_leds->leds[i].r = r;
-			// this->set_leds->leds[i].g = g;
-			// this->set_leds->leds[i].b = b;
 		}
 		this->callSetLeds();
 	}
@@ -274,10 +262,6 @@ void CloverLEDController::proceed()
 			int pos = (int)round(this->counter + (255.0 * i / this->led_count)) % 255;
 			this->rainbow(pos % 255, r, g, b);
 			this->set_leds_index(i,i,r,g,b);
-			// this->set_leds->leds[i].index = i;
-			// this->set_leds->leds[i].r = r;
-			// this->set_leds->leds[i].g = g;
-			// this->set_leds->leds[i].b = b;
 		}
 		this->callSetLeds();
 	}
