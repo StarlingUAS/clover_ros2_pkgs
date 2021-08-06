@@ -114,9 +114,19 @@ class SimpleOffboard : public rclcpp::Node
         void publish();
 
         void getNavigateSetpoint(const rclcpp::Time& stamp, float speed, Point& nav_setpoint);
+        void checkManualControl();
+        void checkState();
+
+        bool serve(enum setpoint_type_t sp_type, float x, float y, float z, float vx, float vy, float vz,
+                    float pitch, float roll, float yaw, float pitch_rate, float roll_rate, float yaw_rate, // editorconfig-checker-disable-line
+                    float lat, float lon, float thrust, float speed, string frame_id, bool auto_arm, // editorconfig-checker-disable-line
+                    bool& success, string& message); // editorconfig-checker-disable-line
 
         // Helper utility functions
         std::chrono::duration<double> get_timeout_parameter(string name, double default_param, bool invert = false);
+        void wait_for_offboard();
+        void wait_for_arm();
+        void wait_for_land();
 
         // Last received telemetry messages
         std::shared_ptr<mavros_msgs::msg::State> state;
@@ -175,6 +185,11 @@ class SimpleOffboard : public rclcpp::Node
         bool busy = false;
         bool wait_armed = false;
         bool nav_from_sp_flag = false;
+
+        // Wait Triggers
+        bool wait_for_offboard_trigger = false;
+        bool wait_for_arm_trigger = false;
+        bool wait_for_land_trigger = false;
 
         // Service Clients
         rclcpp::Client<mavros_msgs::srv::CommandBool>::SharedPtr        arming;
@@ -306,6 +321,70 @@ inline std::chrono::duration<double> SimpleOffboard::get_timeout_parameter(strin
         return std::chrono::duration<double>(1.0/t);
     }
     return std::chrono::duration<double>(t);
+}
+
+void SimpleOffboard::wait_for_offboard(){
+    this->wait_for_offboard_trigger = false;
+    auto start = this->now();
+    rclcpp::TimerBase::SharedPtr timer = this->create_wall_timer(
+        std::chrono::duration<double>(0.1),
+        [this, start, timer](){
+            if(this->state->mode == "OFFBOARD") {
+                this->wait_for_offboard_trigger = true;
+                timer->cancel();
+            } else if (this->now() - start > this->offboard_timeout) {
+                string report = "OFFBOARD timed out";
+                if ((start - this->statustext->header.stamp).seconds() < 0.0)
+					report += ": " + this->statustext->text;
+                timer->cancel();
+                this->wait_for_offboard_trigger = true;
+				throw std::runtime_error(report);
+            }
+        }
+    );
+    while(!this->wait_for_offboard_trigger) {}
+}
+
+void SimpleOffboard::wait_for_arm(){
+    this->wait_for_arm_trigger = false;
+    auto start = this->now();
+    rclcpp::TimerBase::SharedPtr timer = this->create_wall_timer(
+        std::chrono::duration<double>(0.1),
+        [this, start, timer](){
+            if(this->state->armed) {
+                this->wait_for_arm_trigger = true;
+                timer->cancel();
+            } else if (this->now() - start > this->arming_timeout) {
+                string report = "Arming timed out";
+                if ((start - this->statustext->header.stamp).seconds() < 0.0)
+					report += ": " + this->statustext->text;
+                this->wait_for_arm_trigger = true;
+                timer->cancel();
+				throw std::runtime_error(report);
+            }
+        }
+    );
+    while(!this->wait_for_arm_trigger) {}
+}
+
+void SimpleOffboard::wait_for_land(){
+    this->wait_for_land_trigger = false;
+    auto start = this->now();
+    rclcpp::TimerBase::SharedPtr timer = this->create_wall_timer(
+        std::chrono::duration<double>(0.01),
+        [this, start, timer](){
+            if(this->state->mode == "AUTO.LAND") {
+                this->wait_for_land_trigger = true;
+                timer->cancel();
+            } else if (this->now() - start > this->land_timeout) {
+                this->wait_for_land_trigger = true;
+                timer->cancel();
+				throw std::runtime_error("Land request timed out");
+            }
+        }
+    );
+    while(!this->wait_for_land_trigger) {}
+
 }
 
 void SimpleOffboard::handleState(const mavros_msgs::msg::State::SharedPtr s)
@@ -450,43 +529,121 @@ void SimpleOffboard::getNavigateSetpoint(const rclcpp::Time& stamp, float speed,
 	nav_setpoint.z = this->nav_start.pose.position.z + (this->setpoint_position_transformed.pose.position.z - this->nav_start.pose.position.z) * passed;
 }
 
+inline void SimpleOffboard::checkManualControl()
+{
+	if (this->manual_control_timeout != std::chrono::duration<double>::zero() && (this->now() - this->manual_control->header.stamp) > this->manual_control_timeout) {
+		throw std::runtime_error("Manual control timeout, RC is switched off?");
+	}
+
+	if (this->check_kill_switch) {
+		// switch values: https://github.com/PX4/PX4-Autopilot/blob/c302514a0809b1765fafd13c014d705446ae1113/msg/manual_control_setpoint.msg#L3
+		const uint8_t SWITCH_POS_NONE = 0; // switch is not mapped
+		const uint8_t SWITCH_POS_ON = 1; // switch activated
+		const uint8_t SWITCH_POS_MIDDLE = 2; // middle position
+		const uint8_t SWITCH_POS_OFF = 3; // switch not activated
+
+		const int KILL_SWITCH_BIT = 12; // https://github.com/PX4/Firmware/blob/c302514a0809b1765fafd13c014d705446ae1113/src/modules/mavlink/mavlink_messages.cpp#L3975
+		uint8_t kill_switch = (this->manual_control->buttons & (0b11 << KILL_SWITCH_BIT)) >> KILL_SWITCH_BIT;
+
+		if (kill_switch == SWITCH_POS_ON)
+			throw std::runtime_error("Kill switch is on");
+	}
+}
+
+inline void SimpleOffboard::checkState()
+{
+	if ( (this->now() - this->state->header.stamp) > this->state_timeout )
+		throw std::runtime_error("State timeout, check mavros settings");
+
+	if (!this->state->connected)
+		throw std::runtime_error("No connection to FCU, https://clover.coex.tech/connection");
+}
+
+bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float z, float vx, float vy, float vz,
+           float pitch, float roll, float yaw, float pitch_rate, float roll_rate, float yaw_rate, // editorconfig-checker-disable-line
+           float lat, float lon, float thrust, float speed, string frame_id, bool auto_arm, // editorconfig-checker-disable-line
+           bool& success, string& message) // editorconfig-checker-disable-line
+{
+    return true;
+}
+
 bool SimpleOffboard::getTelemetry(std::shared_ptr<GetTelemetry::Request> req, std::shared_ptr<GetTelemetry::Response> res)
 {
     return true;
 }
 
 bool SimpleOffboard::navigate(std::shared_ptr<Navigate::Request> req, std::shared_ptr<Navigate::Response> res) {
-    return true;
+	return this->serve(NAVIGATE, req->x, req->y, req->z, NAN, NAN, NAN, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, NAN, NAN, NAN, req->speed, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::navigateGlobal(std::shared_ptr<NavigateGlobal::Request> req, std::shared_ptr<NavigateGlobal::Response> res) {
-    return true;
+    return this->serve(NAVIGATE_GLOBAL, NAN, NAN, req->z, NAN, NAN, NAN, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, req->lat, req->lon, NAN, req->speed, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setPosition(std::shared_ptr<SetPosition::Request> req, std::shared_ptr<SetPosition::Response> res) {
-    return true;
+	return this->serve(POSITION, req->x, req->y, req->z, NAN, NAN, NAN, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, NAN, NAN, NAN, NAN, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setVelocity(std::shared_ptr<SetVelocity::Request> req, std::shared_ptr<SetVelocity::Response> res) {
-    return true;
+	return this->serve(VELOCITY, NAN, NAN, NAN, req->vx, req->vy, req->vz, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, NAN, NAN, NAN, NAN, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setAttitude(std::shared_ptr<SetAttitude::Request> req, std::shared_ptr<SetAttitude::Response> res) {
-    return true;
+	return this->serve(ATTITUDE, NAN, NAN, NAN, NAN, NAN, NAN, req->pitch, req->roll, req->yaw, NAN, NAN, NAN, NAN, NAN, req->thrust, NAN, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setRates(std::shared_ptr<SetRates::Request> req, std::shared_ptr<SetRates::Response> res) {
-    return true;
+	return this->serve(RATES, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, req->pitch_rate, req->roll_rate, req->yaw_rate, NAN, NAN, req->thrust, NAN, "", req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::land(std::shared_ptr<std_srvs::srv::Trigger::Request> req, std::shared_ptr<std_srvs::srv::Trigger::Response> res) {
-    return true;
+    try {
+		if (this->busy)
+			throw std::runtime_error("Busy");
+
+		this->busy = true;
+
+		this->checkState();
+
+		if (this->land_only_in_offboard) {
+			if (this->state->mode != "OFFBOARD") {
+				throw std::runtime_error("Copter is not in OFFBOARD mode");
+			}
+		}
+
+		auto sm = std::make_shared<mavros_msgs::srv::SetMode::Request>();
+		sm->custom_mode = "AUTO.LAND";
+
+        while (!this->set_mode->wait_for_service(std::chrono::duration<int>(2))) {
+            if (!rclcpp::ok()) {
+                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for set mode service. Exiting.");
+                return 0;
+            }
+            RCLCPP_INFO(this->get_logger(), "service not available, waiting again...");
+        }
+
+        auto result = this->set_mode->async_send_request(sm);
+        // Wait for the result.
+        // if (rclcpp::spin_until_future_complete(this, result) != rclcpp::FutureReturnCode::SUCCESS){
+        //     RCLCPP_ERROR(this->get_logger(), "Failed to call service set mode");
+        // }
+
+		this->wait_for_land();
+        busy = false;
+        return true;
+
+	} catch (const std::exception& e) {
+		res->message = e.what();
+		RCLCPP_INFO(this->get_logger(), "%s", e.what());
+		busy = false;
+		return true;
+	}
 }
 
 int main(int argc, char **argv)
 {
-    // rclcpp::init(argc, argv);
-    // rclcpp::spin(std::make_shared<CloverLEDController>());
-    // rclcpp::shutdown();
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<SimpleOffboard>());
+    rclcpp::shutdown();
     return 0;
 }
