@@ -111,7 +111,7 @@ class SimpleOffboard : public rclcpp::Node
         void handleState(const mavros_msgs::msg::State::SharedPtr s);
         void handleLocalPosition(const PoseStamped::SharedPtr pose);
         void publishBodyFrame();
-        void publish();
+        void publish(const rclcpp::Time& stamp);
 
         void getNavigateSetpoint(const rclcpp::Time& stamp, float speed, Point& nav_setpoint);
         void checkManualControl();
@@ -127,6 +127,9 @@ class SimpleOffboard : public rclcpp::Node
         void wait_for_offboard();
         void wait_for_arm();
         void wait_for_land();
+        bool checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time);
+        void publishSetpoint(const rclcpp::Time& stamp, bool auto_arm);
+        void restartSetpointTimer();
 
         // Last received telemetry messages
         std::shared_ptr<mavros_msgs::msg::State> state;
@@ -303,7 +306,7 @@ SimpleOffboard::SimpleOffboard() :
     ld_serv = this->create_service<std_srvs::srv::Trigger>("land", std::bind(&SimpleOffboard::land, this, _1, _2));
 
     // Initialise Timers
-    this->setpoint_timer = this->create_wall_timer(this->setpoint_rate, [this](){this->publish();});
+    // this->setpoint_timer = this->create_wall_timer(this->setpoint_rate, [this](){this->publish(this->now();});
 
     // Initialise Internal State
     this->position_msg.header.frame_id = this->local_frame;
@@ -384,7 +387,23 @@ void SimpleOffboard::wait_for_land(){
         }
     );
     while(!this->wait_for_land_trigger) {}
+}
 
+bool SimpleOffboard::checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time) {
+    std::string error;
+    if(!this->tf_buffer->canTransform(target_frame, source_frame, time, this->transform_timeout, &error)) {
+        throw std::runtime_error("Can't transform from " + source_frame + " to " + target_frame + " because of: " + error);
+        return false;
+    }
+    return true;
+}
+
+void SimpleOffboard::restartSetpointTimer() {
+    if (this->setpoint_timer) {
+        this->setpoint_timer->cancel();
+    }
+    this->setpoint_timer = this->create_wall_timer(this->setpoint_rate, [this](){this->publish(this->now());});
+    RCLCPP_DEBUG(this->get_logger(), "Reset Setpoint timer");
 }
 
 void SimpleOffboard::handleState(const mavros_msgs::msg::State::SharedPtr s)
@@ -419,9 +438,7 @@ inline void SimpleOffboard::publishBodyFrame()
 	this->transform_broadcaster->sendTransform(this->body);
 }
 
-void SimpleOffboard::publish() {
-    auto stamp = this->now();
-
+void SimpleOffboard::publish(const rclcpp::Time& stamp) {
     if (this->setpoint_type == NONE) return;
 
     this->position_raw_msg.header.stamp = stamp;
@@ -564,7 +581,249 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
            float lat, float lon, float thrust, float speed, string frame_id, bool auto_arm, // editorconfig-checker-disable-line
            bool& success, string& message) // editorconfig-checker-disable-line
 {
-    return true;
+    auto stamp = this->now();
+
+    try {
+        if (this->busy)
+			throw std::runtime_error("Busy");
+
+		this->busy = true;
+
+        // Checks
+        this->checkState();
+
+        if (auto_arm) {
+            this->checkManualControl();
+        }
+
+        // default frame is local frame
+        if (frame_id.empty())
+            frame_id = this->local_frame;
+
+        // look up for reference frame
+        auto search = this->reference_frames.find(frame_id);
+        const string& reference_frame = search == reference_frames.end() ? frame_id: search->second;
+
+        bool skip = false;
+
+        // Serve "partial" commands
+        if (!auto_arm && std::isfinite(yaw) &&
+		    isnan(x) && isnan(y) && isnan(z) && isnan(vx) && isnan(vy) && isnan(vz) &&
+		    isnan(pitch) && isnan(roll) && isnan(thrust) &&
+		    isnan(lat) && isnan(lon)) {
+
+            if (this->setpoint_type == POSITION || this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == VELOCITY) {
+                this->checkTransformExistsBlocking(this->setpoint_position.header.frame_id, frame_id, stamp);
+
+				message = "Changing yaw only";
+
+				QuaternionStamped q;
+				q.header.frame_id = frame_id;
+				q.header.stamp = stamp;
+                tf2::Quaternion quat; // TODO: pitch=0, roll=0 is not totally correct
+                quat.setRPY(0.0, 0.0, yaw);
+				q.quaternion = tf2::toMsg(quat);
+				this->setpoint_position.pose.orientation = this->tf_buffer->transform(q, this->setpoint_position.header.frame_id).quaternion;
+				this->setpoint_yaw_type = YAW;
+                this->publishSetpoint(stamp, auto_arm);
+                skip = true;
+			} else {
+				throw std::runtime_error("Setting yaw is possible only when position or velocity setpoints active");
+			}
+        }
+
+        if (!auto_arm && std::isfinite(yaw_rate) &&
+		    isnan(x) && isnan(y) && isnan(z) && isnan(vx) && isnan(vy) && isnan(vz) &&
+		    isnan(pitch) && isnan(roll) && isnan(yaw) && isnan(thrust) &&
+		    isnan(lat) && isnan(lon)) {
+			// change only the yaw rate
+			if (this->setpoint_type == POSITION || this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == VELOCITY) {
+				message = "Changing yaw rate only";
+
+				this->setpoint_yaw_type = YAW_RATE;
+				this->setpoint_yaw_rate = yaw_rate;
+                this->publishSetpoint(stamp, auto_arm);
+                skip = true;
+			} else {
+				throw std::runtime_error("Setting yaw rate is possible only when position or velocity setpoints active");
+			}
+        }
+
+        if (!skip) { // Refactor out goto statements.
+            // Serve normal commands
+            if (sp_type == NAVIGATE || sp_type == POSITION) {
+                ENSURE_FINITE(x);
+                ENSURE_FINITE(y);
+                ENSURE_FINITE(z);
+            } else if (sp_type == NAVIGATE_GLOBAL) {
+                ENSURE_FINITE(lat);
+                ENSURE_FINITE(lon);
+                ENSURE_FINITE(z);
+            } else if (sp_type == VELOCITY) {
+                ENSURE_FINITE(vx);
+                ENSURE_FINITE(vy);
+                ENSURE_FINITE(vz);
+            } else if (sp_type == ATTITUDE) {
+                ENSURE_FINITE(pitch);
+                ENSURE_FINITE(roll);
+                ENSURE_FINITE(thrust);
+            } else if (sp_type == RATES) {
+                ENSURE_FINITE(pitch_rate);
+                ENSURE_FINITE(roll_rate);
+                ENSURE_FINITE(thrust);
+            }
+
+            if (sp_type == NAVIGATE || sp_type == NAVIGATE_GLOBAL) {
+                if (stamp - this->local_position->header.stamp > this->local_position_timeout)
+                    throw std::runtime_error("No local position, check settings");
+
+                if (speed < 0)
+                    throw std::runtime_error("Navigate speed must be positive, " + std::to_string(speed) + " passed");
+
+                if (speed == 0)
+                    speed = default_speed;
+            }
+
+            if (sp_type == NAVIGATE || sp_type == NAVIGATE_GLOBAL || sp_type == POSITION || sp_type == VELOCITY) {
+                if (yaw_rate != 0 && !std::isnan(yaw))
+                    throw std::runtime_error("Yaw value should be NaN for setting yaw rate");
+
+                if (std::isnan(yaw_rate) && std::isnan(yaw))
+                    throw std::runtime_error("Both yaw and yaw_rate cannot be NaN");
+            }
+
+            if (sp_type == NAVIGATE_GLOBAL) {
+                if (stamp - this->global_position->header.stamp > this->global_position_timeout)
+                    throw std::runtime_error("No global position");
+            }
+
+            if (sp_type == NAVIGATE || sp_type == NAVIGATE_GLOBAL || sp_type == POSITION || sp_type == VELOCITY || sp_type == ATTITUDE) {
+                // make sure transform from frame_id to reference frame available
+                this->checkTransformExistsBlocking(reference_frame, frame_id, stamp);
+
+                // make sure transform from reference frame to local frame available
+                this->checkTransformExistsBlocking(local_frame, reference_frame, stamp);
+            }
+
+            // if (sp_type == NAVIGATE_GLOBAL) {
+            // 	// Calculate x and from lat and lot in request's frame
+            // 	auto pose_local = globalToLocal(lat, lon);
+            // 	pose_local.header.stamp = stamp; // TODO: fix
+            // 	auto xy_in_req_frame = tf_buffer.transform(pose_local, frame_id);
+            // 	x = xy_in_req_frame.pose.position.x;
+            // 	y = xy_in_req_frame.pose.position.y;
+            // }
+
+            // Everything fine - switch setpoint type
+            this->setpoint_type = sp_type;
+
+            if (sp_type != NAVIGATE && sp_type != NAVIGATE_GLOBAL) {
+                this->nav_from_sp_flag = false;
+            }
+
+            if (sp_type == NAVIGATE || sp_type == NAVIGATE_GLOBAL) {
+                // starting point
+                if (this->nav_from_sp && this->nav_from_sp_flag) {
+                    message = "Navigating from current setpoint";
+                    this->nav_start = this->position_msg;
+                } else {
+                    this->nav_start = *this->local_position;
+                }
+                this->nav_speed = speed;
+                this->nav_from_sp_flag = true;
+            }
+
+            if (sp_type == POSITION || sp_type == NAVIGATE || sp_type == NAVIGATE_GLOBAL || sp_type == VELOCITY || sp_type == ATTITUDE) {
+                // destination point and/or yaw
+                PoseStamped ps;
+                ps.header.frame_id = frame_id;
+                ps.header.stamp = stamp;
+                ps.pose.position.x = x;
+                ps.pose.position.y = y;
+                ps.pose.position.z = z;
+                ps.pose.orientation.w = 1.0; // Ensure quaternion is always valid
+
+                if (std::isnan(yaw)) {
+                    this->setpoint_yaw_type = YAW_RATE;
+                    this->setpoint_yaw_rate = yaw_rate;
+                } else if (std::isinf(yaw) && yaw > 0) {
+                    // yaw towards
+                    this->setpoint_yaw_type = TOWARDS;
+                    yaw = 0;
+                    this->setpoint_yaw_rate = 0;
+                } else {
+                    this->setpoint_yaw_type = YAW;
+                    this->setpoint_yaw_rate = 0;
+                    tf2::Quaternion q;
+                    q.setRPY(0, 0, yaw);
+                    ps.pose.orientation = tf2::toMsg(q);
+                }
+
+                this->tf_buffer->transform(ps, this->setpoint_position, reference_frame);
+            }
+
+            if (sp_type == VELOCITY) {
+                Vector3Stamped vel;
+                vel.header.frame_id = frame_id;
+                vel.header.stamp = stamp;
+                vel.vector.x = vx;
+                vel.vector.y = vy;
+                vel.vector.z = vz;
+                this->tf_buffer->transform(vel, this->setpoint_velocity, reference_frame);
+            }
+
+            if (sp_type == ATTITUDE || sp_type == RATES) {
+                this->thrust_msg.thrust = thrust;
+            }
+
+            if (sp_type == RATES) {
+                this->rates_msg.twist.angular.x = roll_rate;
+                this->rates_msg.twist.angular.y = pitch_rate;
+                this->rates_msg.twist.angular.z = yaw_rate;
+            }
+
+            this->wait_armed = auto_arm;
+            this->publishSetpoint(stamp, auto_arm);
+        }
+    } catch (const std::exception& e) {
+		message = e.what();
+		RCLCPP_WARN(this->get_logger(), "%s", message.c_str());
+		this->busy = false;
+		return true;
+	}
+
+	success = true;
+	this->busy = false;
+	return true;
+}
+
+void SimpleOffboard::publishSetpoint(const rclcpp::Time& stamp, bool auto_arm) {
+    this->publish(stamp); // calculate initial transformed messages first
+    this->restartSetpointTimer();
+
+    // publish target frame
+    if (!this->target.child_frame_id.empty()) {
+        if (this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == POSITION) {
+            this->target.header.frame_id = this->setpoint_position.header.frame_id;
+            this->target.header.stamp = stamp;
+            this->target.transform.translation.x = this->setpoint_position.pose.position.x;
+            this->target.transform.translation.y = this->setpoint_position.pose.position.y;
+            this->target.transform.translation.z = this->setpoint_position.pose.position.z;
+            this->target.transform.rotation = this->setpoint_position.pose.orientation;
+            this->static_transform_broadcaster->sendTransform(this->target);
+        }
+    }
+
+    if (auto_arm) {
+        // offboardAndArm();
+        this->wait_armed = false;
+    } else if (this->state->mode != "OFFBOARD") {
+        this->setpoint_timer->cancel();
+        throw std::runtime_error("Copter is not in OFFBOARD mode, use auto_arm?");
+    } else if (!this->state->armed) {
+        this->setpoint_timer->cancel();
+        throw std::runtime_error("Copter is not armed, use auto_arm?");
+    }
 }
 
 bool SimpleOffboard::getTelemetry(std::shared_ptr<GetTelemetry::Request> req, std::shared_ptr<GetTelemetry::Response> res)
