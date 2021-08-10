@@ -85,6 +85,7 @@ install(DIRECTORY
 
 install(TARGETS
   led
+  simple_offboard
   DESTINATION lib/${PROJECT_NAME}
 )
 
