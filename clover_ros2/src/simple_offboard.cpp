@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-// #include <GeographicLib/Geodesic.hpp> needed for global to local transformations but cannot find it...
+#include <GeographicLib/Geodesic.hpp> // needed for global to local transformations but cannot find it...
 
 #include <tf2/utils.h>
 #include <tf2/convert.h>
@@ -112,6 +112,8 @@ class SimpleOffboard : public rclcpp::Node
         void handleLocalPosition(const PoseStamped::SharedPtr pose);
         void publishBodyFrame();
         void publish(const rclcpp::Time& stamp);
+        PoseStamped globalToLocal(double lat, double lon);
+
 
         void getNavigateSetpoint(const rclcpp::Time& stamp, float speed, Point& nav_setpoint);
         void checkManualControl();
@@ -127,7 +129,7 @@ class SimpleOffboard : public rclcpp::Node
         void wait_for_offboard();
         void wait_for_arm();
         void wait_for_land();
-        bool checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time);
+        bool checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time, const rclcpp::Duration& timeout);
         void publishSetpoint(const rclcpp::Time& stamp, bool auto_arm);
         void restartSetpointTimer();
 
@@ -305,9 +307,6 @@ SimpleOffboard::SimpleOffboard() :
     sr_serv = this->create_service<clover_ros2::srv::SetRates>("set_rates", std::bind(&SimpleOffboard::setRates, this, _1, _2));
     ld_serv = this->create_service<std_srvs::srv::Trigger>("land", std::bind(&SimpleOffboard::land, this, _1, _2));
 
-    // Initialise Timers
-    // this->setpoint_timer = this->create_wall_timer(this->setpoint_rate, [this](){this->publish(this->now();});
-
     // Initialise Internal State
     this->position_msg.header.frame_id = this->local_frame;
 	this->position_raw_msg.header.frame_id = this->local_frame;
@@ -389,9 +388,9 @@ void SimpleOffboard::wait_for_land(){
     while(!this->wait_for_land_trigger) {}
 }
 
-bool SimpleOffboard::checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time) {
+bool SimpleOffboard::checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time, const rclcpp::Duration& timeout) {
     std::string error;
-    if(!this->tf_buffer->canTransform(target_frame, source_frame, time, this->transform_timeout, &error)) {
+    if(!this->tf_buffer->canTransform(target_frame, source_frame, time, timeout, &error)) {
         throw std::runtime_error("Can't transform from " + source_frame + " to " + target_frame + " because of: " + error);
         return false;
     }
@@ -404,6 +403,32 @@ void SimpleOffboard::restartSetpointTimer() {
     }
     this->setpoint_timer = this->create_wall_timer(this->setpoint_rate, [this](){this->publish(this->now());});
     RCLCPP_DEBUG(this->get_logger(), "Reset Setpoint timer");
+}
+
+PoseStamped SimpleOffboard::globalToLocal(double lat, double lon)
+{
+	auto earth = GeographicLib::Geodesic::WGS84();
+
+	// Determine azimuth and distance between current and destination point
+	double _, distance, azimuth;
+	earth.Inverse(this->global_position->latitude, this->global_position->longitude, lat, lon, distance, _, azimuth);
+
+	double x_offset, y_offset;
+	double azimuth_radians = azimuth * M_PI / 180;
+	x_offset = distance * sin(azimuth_radians);
+	y_offset = distance * cos(azimuth_radians);
+
+    this->checkTransformExistsBlocking(this->local_frame, this->fcu_frame, this->global_position->header.stamp, std::chrono::duration<double>(0.2));
+
+	auto local = this->tf_buffer->lookupTransform(this->local_frame, this->fcu_frame, this->global_position->header.stamp);
+
+	PoseStamped pose;
+	pose.header.stamp = this->global_position->header.stamp; // TODO: ?
+	pose.header.frame_id = this->local_frame;
+	pose.pose.position.x = local.transform.translation.x + x_offset;
+	pose.pose.position.y = local.transform.translation.y + y_offset;
+	pose.pose.orientation.w = 1;
+	return pose;
 }
 
 void SimpleOffboard::handleState(const mavros_msgs::msg::State::SharedPtr s)
@@ -613,7 +638,7 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 		    isnan(lat) && isnan(lon)) {
 
             if (this->setpoint_type == POSITION || this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == VELOCITY) {
-                this->checkTransformExistsBlocking(this->setpoint_position.header.frame_id, frame_id, stamp);
+                this->checkTransformExistsBlocking(this->setpoint_position.header.frame_id, frame_id, stamp, this->transform_timeout);
 
 				message = "Changing yaw only";
 
@@ -699,20 +724,20 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 
             if (sp_type == NAVIGATE || sp_type == NAVIGATE_GLOBAL || sp_type == POSITION || sp_type == VELOCITY || sp_type == ATTITUDE) {
                 // make sure transform from frame_id to reference frame available
-                this->checkTransformExistsBlocking(reference_frame, frame_id, stamp);
+                this->checkTransformExistsBlocking(reference_frame, frame_id, stamp, this->transform_timeout);
 
                 // make sure transform from reference frame to local frame available
-                this->checkTransformExistsBlocking(local_frame, reference_frame, stamp);
+                this->checkTransformExistsBlocking(local_frame, reference_frame, stamp, this->transform_timeout);
             }
 
-            // if (sp_type == NAVIGATE_GLOBAL) {
-            // 	// Calculate x and from lat and lot in request's frame
-            // 	auto pose_local = globalToLocal(lat, lon);
-            // 	pose_local.header.stamp = stamp; // TODO: fix
-            // 	auto xy_in_req_frame = tf_buffer.transform(pose_local, frame_id);
-            // 	x = xy_in_req_frame.pose.position.x;
-            // 	y = xy_in_req_frame.pose.position.y;
-            // }
+            if (sp_type == NAVIGATE_GLOBAL) {
+            	// Calculate x and from lat and lot in request's frame
+            	auto pose_local = this->globalToLocal(lat, lon);
+            	pose_local.header.stamp = stamp; // TODO: fix
+            	auto xy_in_req_frame = this->tf_buffer->transform(pose_local, frame_id);
+            	x = xy_in_req_frame.pose.position.x;
+            	y = xy_in_req_frame.pose.position.y;
+            }
 
             // Everything fine - switch setpoint type
             this->setpoint_type = sp_type;
@@ -815,7 +840,8 @@ void SimpleOffboard::publishSetpoint(const rclcpp::Time& stamp, bool auto_arm) {
     }
 
     if (auto_arm) {
-        // offboardAndArm();
+        this->wait_for_offboard(); // Check offboard
+        this->wait_for_arm();      // Arm drone
         this->wait_armed = false;
     } else if (this->state->mode != "OFFBOARD") {
         this->setpoint_timer->cancel();
@@ -828,6 +854,90 @@ void SimpleOffboard::publishSetpoint(const rclcpp::Time& stamp, bool auto_arm) {
 
 bool SimpleOffboard::getTelemetry(std::shared_ptr<GetTelemetry::Request> req, std::shared_ptr<GetTelemetry::Response> res)
 {
+    auto stamp = this->now();
+
+    if (req->frame_id.empty())
+		req->frame_id = this->local_frame;
+
+	res->frame_id = req->frame_id;
+	res->x = NAN;
+	res->y = NAN;
+	res->z = NAN;
+	res->lat = NAN;
+	res->lon = NAN;
+	res->alt = NAN;
+	res->vx = NAN;
+	res->vy = NAN;
+	res->vz = NAN;
+	res->pitch = NAN;
+	res->roll = NAN;
+	res->yaw = NAN;
+	res->pitch_rate = NAN;
+	res->roll_rate = NAN;
+	res->yaw_rate = NAN;
+	res->voltage = NAN;
+	res->cell_voltage = NAN;
+
+    if(stamp - this->state->header.stamp < this->state_timeout) {
+        res->connected = this->state->connected;
+        res->armed = this->state->armed;
+        res->mode = this->state->mode;
+    }
+
+    try {
+		this->checkTransformExistsBlocking(req->frame_id, this->fcu_frame, stamp, this->telemetry_transform_timeout);
+		auto transform = this->tf_buffer->lookupTransform(req->frame_id, this->fcu_frame, stamp);
+		res->x = transform.transform.translation.x;
+		res->y = transform.transform.translation.y;
+		res->z = transform.transform.translation.z;
+
+		double yaw, pitch, roll;
+		tf2::getEulerYPR(transform.transform.rotation, yaw, pitch, roll);
+		res->yaw = yaw;
+		res->pitch = pitch;
+		res->roll = roll;
+	} catch (const tf2::TransformException& e) {
+		RCLCPP_DEBUG(this->get_logger(), "Get Telemetry Error %s", e.what());
+	}
+
+    if (stamp - this->velocity->header.stamp < this->velocity_timeout) {
+		try {
+			// transform velocity
+			this->checkTransformExistsBlocking(req->frame_id, this->fcu_frame, this->velocity->header.stamp, this->telemetry_transform_timeout);
+			Vector3Stamped vec, vec_out;
+			vec.header.stamp = this->velocity->header.stamp;
+			vec.header.frame_id = this->velocity->header.frame_id;
+			vec.vector = this->velocity->twist.linear;
+			this->tf_buffer->transform(vec, vec_out, req->frame_id);
+
+			res->vx = vec_out.vector.x;
+			res->vy = vec_out.vector.y;
+			res->vz = vec_out.vector.z;
+		} catch (const tf2::TransformException& e) {}
+
+		// use angular velocities as they are
+		res->yaw_rate =      this->velocity->twist.angular.z;
+		res->pitch_rate =    this->velocity->twist.angular.y;
+		res->roll_rate =     this->velocity->twist.angular.x;
+	}
+
+    if (stamp - this->global_position->header.stamp < this->global_position_timeout) {
+		res->lat = this->global_position->latitude;
+		res->lon = this->global_position->longitude;
+		res->alt = this->global_position->altitude;
+	}
+
+	if (stamp - this->battery->header.stamp < this->battery_timeout) {
+		res->voltage = this->battery->voltage;
+		if (!this->battery->cell_voltage.empty()) {
+            double voltage = 0;
+            for (float v: this->battery->cell_voltage) {
+                voltage += v;
+            }
+			res->cell_voltage = voltage; // total voltage
+		}
+	}
+
     return true;
 }
 
