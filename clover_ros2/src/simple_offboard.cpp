@@ -263,7 +263,7 @@ SimpleOffboard::SimpleOffboard() :
 	global_position_timeout = this->get_timeout_parameter("global_position_timeout", 10.0);
 	battery_timeout = this->get_timeout_parameter("battery_timeout", 2.0);
 	manual_control_timeout = this->get_timeout_parameter("manual_control_timeout", 0.0);
-	transform_timeout = this->get_timeout_parameter("transform_timeout", 0.5);
+	transform_timeout = this->get_timeout_parameter("transform_timeout", 10.0);
 	telemetry_transform_timeout = this->get_timeout_parameter("telemetry_transform_timeout", 0.5);
 	offboard_timeout = this->get_timeout_parameter("offboard_timeout", 3.0);
 	land_timeout = this->get_timeout_parameter("land_timeout", 3.0);
@@ -312,6 +312,8 @@ SimpleOffboard::SimpleOffboard() :
 	this->position_raw_msg.header.frame_id = this->local_frame;
 	this->position_raw_msg.coordinate_frame = PositionTarget::FRAME_LOCAL_NED;
 	this->rates_msg.header.frame_id = this->fcu_frame;
+
+    this->publish(this->now());
 
     RCLCPP_INFO(this->get_logger(), "Simple Offboard Controller Initialised");
 }
@@ -390,6 +392,7 @@ void SimpleOffboard::wait_for_land(){
 
 bool SimpleOffboard::checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time, const rclcpp::Duration& timeout) {
     std::string error;
+    RCLCPP_INFO(this->get_logger(), "Testing transform from %s to %s", target_frame.c_str(), source_frame.c_str());
     if(!this->tf_buffer->canTransform(target_frame, source_frame, time, timeout, &error)) {
         throw std::runtime_error("Can't transform from " + source_frame + " to " + target_frame + " because of: " + error);
         return false;
@@ -608,19 +611,25 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 {
     auto stamp = this->now();
 
+    RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE");
     try {
         if (this->busy)
 			throw std::runtime_error("Busy");
 
 		this->busy = true;
 
+        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE1");
+
         // Checks
         this->checkState();
 
-        if (auto_arm) {
+        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE1");
+
+        if (auto_arm && this->manual_control) {
             this->checkManualControl();
         }
 
+        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE2");
         // default frame is local frame
         if (frame_id.empty())
             frame_id = this->local_frame;
@@ -631,11 +640,15 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 
         bool skip = false;
 
+        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE2");
+
         // Serve "partial" commands
         if (!auto_arm && std::isfinite(yaw) &&
 		    isnan(x) && isnan(y) && isnan(z) && isnan(vx) && isnan(vy) && isnan(vz) &&
 		    isnan(pitch) && isnan(roll) && isnan(thrust) &&
 		    isnan(lat) && isnan(lon)) {
+
+            RCLCPP_INFO(this->get_logger(), "Serving Partial 1");
 
             if (this->setpoint_type == POSITION || this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == VELOCITY) {
                 this->checkTransformExistsBlocking(this->setpoint_position.header.frame_id, frame_id, stamp, this->transform_timeout);
@@ -661,6 +674,8 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 		    isnan(x) && isnan(y) && isnan(z) && isnan(vx) && isnan(vy) && isnan(vz) &&
 		    isnan(pitch) && isnan(roll) && isnan(yaw) && isnan(thrust) &&
 		    isnan(lat) && isnan(lon)) {
+
+            RCLCPP_INFO(this->get_logger(), "Serving Partial 2");
 			// change only the yaw rate
 			if (this->setpoint_type == POSITION || this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == VELOCITY) {
 				message = "Changing yaw rate only";
@@ -673,6 +688,8 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 				throw std::runtime_error("Setting yaw rate is possible only when position or velocity setpoints active");
 			}
         }
+
+        RCLCPP_INFO(this->get_logger(), "Serving Normal 1");
 
         if (!skip) { // Refactor out goto statements.
             // Serve normal commands
@@ -699,7 +716,7 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
             }
 
             if (sp_type == NAVIGATE || sp_type == NAVIGATE_GLOBAL) {
-                if (stamp - this->local_position->header.stamp > this->local_position_timeout)
+                if (this->now() - this->local_position->header.stamp > this->local_position_timeout)
                     throw std::runtime_error("No local position, check settings");
 
                 if (speed < 0)
@@ -718,7 +735,7 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
             }
 
             if (sp_type == NAVIGATE_GLOBAL) {
-                if (stamp - this->global_position->header.stamp > this->global_position_timeout)
+                if (this->now() - this->global_position->header.stamp > this->global_position_timeout)
                     throw std::runtime_error("No global position");
             }
 
@@ -823,6 +840,7 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 }
 
 void SimpleOffboard::publishSetpoint(const rclcpp::Time& stamp, bool auto_arm) {
+    RCLCPP_INFO(this->get_logger(), "Publishing Setpoint");
     this->publish(stamp); // calculate initial transformed messages first
     this->restartSetpointTimer();
 
