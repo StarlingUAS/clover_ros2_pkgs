@@ -113,7 +113,7 @@ class SimpleOffboard : public rclcpp::Node
         void publishBodyFrame();
         void publish(const rclcpp::Time& stamp);
         PoseStamped globalToLocal(double lat, double lon);
-
+        void sendSetModeRequest(string custom_mode);
 
         void getNavigateSetpoint(const rclcpp::Time& stamp, float speed, Point& nav_setpoint);
         void checkManualControl();
@@ -144,6 +144,7 @@ class SimpleOffboard : public rclcpp::Node
 
         // tf2
         std::shared_ptr<tf2_ros::Buffer> tf_buffer;
+        std::shared_ptr<tf2_ros::TransformListener> transform_listener;
         std::shared_ptr<tf2_ros::TransformBroadcaster> transform_broadcaster;
         std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_transform_broadcaster;
 
@@ -191,11 +192,6 @@ class SimpleOffboard : public rclcpp::Node
         bool wait_armed = false;
         bool nav_from_sp_flag = false;
 
-        // Wait Triggers
-        bool wait_for_offboard_trigger = false;
-        bool wait_for_arm_trigger = false;
-        bool wait_for_land_trigger = false;
-
         // Service Clients
         rclcpp::Client<mavros_msgs::srv::CommandBool>::SharedPtr        arming;
         rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr            set_mode;
@@ -226,6 +222,12 @@ class SimpleOffboard : public rclcpp::Node
         rclcpp::Service<clover_ros2::srv::SetAttitude>::SharedPtr       sa_serv;
         rclcpp::Service<clover_ros2::srv::SetRates>::SharedPtr          sr_serv;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr              ld_serv;
+
+        rclcpp::CallbackGroup::SharedPtr callback_group_services_;
+        rclcpp::CallbackGroup::SharedPtr callback_group_timers_;
+        rclcpp::CallbackGroup::SharedPtr callback_group_clients_;
+        rclcpp::CallbackGroup::SharedPtr callback_group_subscribers_;
+
 };
 
 SimpleOffboard::SimpleOffboard() :
@@ -236,11 +238,21 @@ SimpleOffboard::SimpleOffboard() :
 			.automatically_declare_parameters_from_overrides(true)
 	)
 {
+
+    this->callback_group_services_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::Reentrant);
+    this->callback_group_timers_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::Reentrant);
+    this->callback_group_subscribers_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::Reentrant);
+    this->callback_group_clients_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::MutuallyExclusive);
+
     // Initialise transforms
     this->tf_buffer = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-    tf2_ros::TransformListener tf_listener(*this->tf_buffer);
-    transform_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
-	static_transform_broadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+    this->transform_listener = std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer);
+    this->transform_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+	this->static_transform_broadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
 
     // Get parameters
     this->get_parameter_or("mavros/local_position/tf/frame_id", this->local_frame, string("map"));
@@ -252,7 +264,7 @@ SimpleOffboard::SimpleOffboard() :
 	this->get_parameter_or("nav_from_sp", this->nav_from_sp, true);
 	this->get_parameter_or("check_kill_switch", this->check_kill_switch, true);
 	this->get_parameter_or("default_speed", this->default_speed, 0.5f);
-    this->get_parameter_or("body_frame", this->body.child_frame_id, string("body"));
+    this->get_parameter_or("body_frame", this->body.child_frame_id, string("base_link"));
 	this->get_parameters("reference_frames", this->reference_frames);
 
     // Get Timeout parameters
@@ -263,19 +275,22 @@ SimpleOffboard::SimpleOffboard() :
 	global_position_timeout = this->get_timeout_parameter("global_position_timeout", 10.0);
 	battery_timeout = this->get_timeout_parameter("battery_timeout", 2.0);
 	manual_control_timeout = this->get_timeout_parameter("manual_control_timeout", 0.0);
-	transform_timeout = this->get_timeout_parameter("transform_timeout", 10.0);
+	transform_timeout = this->get_timeout_parameter("transform_timeout", 2.0);
 	telemetry_transform_timeout = this->get_timeout_parameter("telemetry_transform_timeout", 0.5);
 	offboard_timeout = this->get_timeout_parameter("offboard_timeout", 3.0);
 	land_timeout = this->get_timeout_parameter("land_timeout", 3.0);
 	arming_timeout = this->get_timeout_parameter("arming_timeout", 4.0);
 
     // Initialise Service Clients
-    this->arming = this->create_client<mavros_msgs::srv::CommandBool>("mavros/cmd/arming");
-    this->set_mode = this->create_client<mavros_msgs::srv::SetMode>("mavros/set_mode");
+    this->arming = this->create_client<mavros_msgs::srv::CommandBool>("mavros/cmd/arming", rmw_qos_profile_services_default, this->callback_group_clients_);
+    this->set_mode = this->create_client<mavros_msgs::srv::SetMode>("mavros/set_mode", rmw_qos_profile_services_default, this->callback_group_clients_);
 
     // Initialise Telemetry Subscribers
+    auto sub_opt = rclcpp::SubscriptionOptions();
+    sub_opt.callback_group = this->callback_group_subscribers_;
+
     this->state_sub =           this->create_subscription<mavros_msgs::msg::State>(
-        "mavros/state", 1, [this](const mavros_msgs::msg::State::SharedPtr s){this->handleState(s);});
+        "mavros/state", 1, [this](const mavros_msgs::msg::State::SharedPtr s){this->handleState(s);}, sub_opt);
     this->velocity_sub =        this->create_subscription<TwistStamped>(
         "mavros/local_position/velocity_body", 1, [this](const TwistStamped::SharedPtr msg){this->velocity = msg;});
     this->global_position_sub = this->create_subscription<NavSatFix>(
@@ -287,7 +302,7 @@ SimpleOffboard::SimpleOffboard() :
     this->manual_control_sub =  this->create_subscription<mavros_msgs::msg::ManualControl>(
         "mavros/manual_control/control", 1, [this](const mavros_msgs::msg::ManualControl::SharedPtr msg){this->manual_control = msg;});
     this->local_position_sub =  this->create_subscription<PoseStamped>(
-        "mavros/local_position/pose", 1, [this](const PoseStamped::SharedPtr s){this->handleLocalPosition(s);});
+        "mavros/local_position/pose", 1, [this](const PoseStamped::SharedPtr s){this->handleLocalPosition(s);}, sub_opt);
 
     // Initialise Publishers
     position_pub     = this->create_publisher<PoseStamped>("mavros/setpoint_position/local", 1);
@@ -299,7 +314,7 @@ SimpleOffboard::SimpleOffboard() :
 
     // Initialise Service Servers
     gt_serv = this->create_service<clover_ros2::srv::GetTelemetry>("get_telemetry", std::bind(&SimpleOffboard::getTelemetry, this, _1, _2));
-    na_serv = this->create_service<clover_ros2::srv::Navigate>("navigate", std::bind(&SimpleOffboard::navigate, this, _1, _2));
+    na_serv = this->create_service<clover_ros2::srv::Navigate>("navigate", std::bind(&SimpleOffboard::navigate, this, _1, _2), rmw_qos_profile_services_default, this->callback_group_services_);
     ng_serv = this->create_service<clover_ros2::srv::NavigateGlobal>("navigate_global", std::bind(&SimpleOffboard::navigateGlobal, this, _1, _2));
     sp_serv = this->create_service<clover_ros2::srv::SetPosition>("set_position", std::bind(&SimpleOffboard::setPosition, this, _1, _2));
     sv_serv = this->create_service<clover_ros2::srv::SetVelocity>("set_velocity", std::bind(&SimpleOffboard::setVelocity, this, _1, _2));
@@ -327,77 +342,108 @@ inline std::chrono::duration<double> SimpleOffboard::get_timeout_parameter(strin
     return std::chrono::duration<double>(t);
 }
 
-void SimpleOffboard::wait_for_offboard(){
-    this->wait_for_offboard_trigger = false;
-    auto start = this->now();
-    rclcpp::TimerBase::SharedPtr timer = this->create_wall_timer(
-        std::chrono::duration<double>(0.1),
-        [this, start, timer](){
-            if(this->state->mode == "OFFBOARD") {
-                this->wait_for_offboard_trigger = true;
-                timer->cancel();
-            } else if (this->now() - start > this->offboard_timeout) {
-                string report = "OFFBOARD timed out";
-                if ((start - this->statustext->header.stamp).seconds() < 0.0)
-					report += ": " + this->statustext->text;
-                timer->cancel();
-                this->wait_for_offboard_trigger = true;
-				throw std::runtime_error(report);
-            }
+void SimpleOffboard::sendSetModeRequest(string custom_mode) {
+    auto sm = std::make_shared<mavros_msgs::srv::SetMode::Request>();
+    sm->custom_mode = custom_mode;
+
+    while (!this->set_mode->wait_for_service(std::chrono::duration<int>(2))) {
+        if (!rclcpp::ok()) {
+            RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for set mode service. Exiting.");
+            throw std::runtime_error("Interrupted while waiting for set mode service. Exiting.");
+            return;
         }
-    );
-    while(!this->wait_for_offboard_trigger) {}
+        RCLCPP_INFO(this->get_logger(), "service not available, waiting again...");
+    }
+
+    auto result_future = this->set_mode->async_send_request(sm);
+    if (result_future.wait_for(std::chrono::duration<double>(10.0)) != std::future_status::ready)
+    {
+        RCLCPP_ERROR(this->get_logger(), "service call failed :(");
+        throw std::runtime_error("Service call failed");
+        return;
+    }
+
+    auto result = result_future.get();
+
+    RCLCPP_INFO(this->get_logger(), "Sent request: %s", custom_mode.c_str());
+}
+
+void SimpleOffboard::wait_for_offboard(){
+    RCLCPP_INFO(this->get_logger(), "Sending OFFBOARD Request");
+    this->sendSetModeRequest("OFFBOARD");
+
+    auto start = this->now();
+    while(this->state->mode != "OFFBOARD") {
+        RCLCPP_INFO(this->get_logger(), "Waiting for Offboard");
+        if (this->now() - start > this->offboard_timeout) {
+            RCLCPP_ERROR(this->get_logger(), "Offboard timed out");
+            throw std::runtime_error("Offboard timed out");
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    RCLCPP_INFO(this->get_logger(), "Confirmed In OFFBOARD Mode");
 }
 
 void SimpleOffboard::wait_for_arm(){
-    this->wait_for_arm_trigger = false;
-    auto start = this->now();
-    rclcpp::TimerBase::SharedPtr timer = this->create_wall_timer(
-        std::chrono::duration<double>(0.1),
-        [this, start, timer](){
-            if(this->state->armed) {
-                this->wait_for_arm_trigger = true;
-                timer->cancel();
-            } else if (this->now() - start > this->arming_timeout) {
-                string report = "Arming timed out";
-                if ((start - this->statustext->header.stamp).seconds() < 0.0)
-					report += ": " + this->statustext->text;
-                this->wait_for_arm_trigger = true;
-                timer->cancel();
-				throw std::runtime_error(report);
-            }
+
+    RCLCPP_INFO(this->get_logger(), "Sending ARM Request");
+    auto sm = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
+    sm->value = true;
+    while (!this->arming->wait_for_service(std::chrono::duration<int>(2))) {
+        if (!rclcpp::ok()) {
+            RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for set mode service. Exiting.");
+            throw std::runtime_error("Interrupted while waiting for set mode service. Exiting.");
+            return;
         }
-    );
-    while(!this->wait_for_arm_trigger) {}
+        RCLCPP_INFO(this->get_logger(), "service not available, waiting again...");
+    }
+
+    auto result_future = this->arming->async_send_request(sm);
+    if (result_future.wait_for(std::chrono::duration<double>(10.0)) != std::future_status::ready)
+    {
+        RCLCPP_ERROR(this->get_logger(), "Arming service call failed :(");
+        throw std::runtime_error("Arming Service call failed");
+        return;
+    }
+
+    auto result = result_future.get();
+    RCLCPP_INFO(this->get_logger(), "Sent ARM Request");
+
+    auto start = this->now();
+    while(!this->state->armed) {
+        RCLCPP_INFO(this->get_logger(), "Waiting for Arming");
+        if (this->now() - start > this->arming_timeout) {
+            RCLCPP_ERROR(this->get_logger(), "Arming timed out");
+            throw std::runtime_error("Arming timed out");
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    RCLCPP_INFO(this->get_logger(), "Confirmed Armed");
 }
 
 void SimpleOffboard::wait_for_land(){
-    this->wait_for_land_trigger = false;
     auto start = this->now();
-    rclcpp::TimerBase::SharedPtr timer = this->create_wall_timer(
-        std::chrono::duration<double>(0.01),
-        [this, start, timer](){
-            if(this->state->mode == "AUTO.LAND") {
-                this->wait_for_land_trigger = true;
-                timer->cancel();
-            } else if (this->now() - start > this->land_timeout) {
-                this->wait_for_land_trigger = true;
-                timer->cancel();
-				throw std::runtime_error("Land request timed out");
-            }
+    while(this->state->mode != "AUTO.LAND") {
+        RCLCPP_INFO(this->get_logger(), "Waiting for Landing");
+        if (this->now() - start > this->land_timeout) {
+            RCLCPP_ERROR(this->get_logger(), "Landing timed out");
+            throw std::runtime_error("Landing timed out");
         }
-    );
-    while(!this->wait_for_land_trigger) {}
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    RCLCPP_INFO(this->get_logger(), "Confirmed Landed");
 }
 
 bool SimpleOffboard::checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time, const rclcpp::Duration& timeout) {
-    std::string error;
     RCLCPP_INFO(this->get_logger(), "Testing transform from %s to %s", target_frame.c_str(), source_frame.c_str());
-    if(!this->tf_buffer->canTransform(target_frame, source_frame, time, timeout, &error)) {
-        throw std::runtime_error("Can't transform from " + source_frame + " to " + target_frame + " because of: " + error);
-        return false;
+    std::string error;
+
+    while (this->now() - time < timeout) {
+        if(this->tf_buffer->canTransform(target_frame, source_frame, time)) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    return true;
+
+    return false;
 }
 
 void SimpleOffboard::restartSetpointTimer() {
@@ -405,7 +451,7 @@ void SimpleOffboard::restartSetpointTimer() {
         this->setpoint_timer->cancel();
     }
     this->setpoint_timer = this->create_wall_timer(this->setpoint_rate, [this](){this->publish(this->now());});
-    RCLCPP_DEBUG(this->get_logger(), "Reset Setpoint timer");
+    RCLCPP_INFO(this->get_logger(), "Reset Setpoint timer");
 }
 
 PoseStamped SimpleOffboard::globalToLocal(double lat, double lon)
@@ -478,7 +524,9 @@ void SimpleOffboard::publish(const rclcpp::Time& stamp) {
 		// transform position and/or yaw
 		if (this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == POSITION || this->setpoint_type == VELOCITY || this->setpoint_type == ATTITUDE) {
 			this->setpoint_position.header.stamp = stamp;
-			this->tf_buffer->transform(this->setpoint_position, this->setpoint_position_transformed, this->local_frame, _transform_delay);
+            RCLCPP_INFO(this->get_logger(), "Transform from %s to %s", this->setpoint_position.header.frame_id.c_str(), this->local_frame.c_str());
+            this->checkTransformExistsBlocking(this->setpoint_position.header.frame_id, this->local_frame, this->now(), this->transform_timeout);
+			this->tf_buffer->transform(this->setpoint_position, this->setpoint_position_transformed, this->local_frame, std::chrono::duration_cast<std::chrono::nanoseconds>(this->transform_timeout));
 		}
 
 		// transform velocity
@@ -488,10 +536,12 @@ void SimpleOffboard::publish(const rclcpp::Time& stamp) {
 		}
 
 	} catch (const tf2::TransformException& e) {
-		RCLCPP_WARN(this->get_logger(), "publish can't transform");
+		RCLCPP_WARN(this->get_logger(), "publish can't transform, error: %s", e.what());
 	}
 
     if (this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL) {
+
+
 		this->position_msg.pose.orientation = this->setpoint_position_transformed.pose.orientation; // copy yaw
 		this->getNavigateSetpoint(stamp, this->nav_speed, this->position_msg.pose.position);
 
@@ -537,6 +587,8 @@ void SimpleOffboard::publish(const rclcpp::Time& stamp) {
 			this->setpoint.header.stamp = this->position_msg.header.stamp;
 			this->transform_broadcaster->sendTransform(this->setpoint);
 		}
+
+        RCLCPP_INFO(this->get_logger(), "finished setpoint frame publishing");
 	}
 
     if (this->setpoint_type == ATTITUDE) {
@@ -829,9 +881,9 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
         }
     } catch (const std::exception& e) {
 		message = e.what();
-		RCLCPP_WARN(this->get_logger(), "%s", message.c_str());
+		RCLCPP_ERROR(this->get_logger(), "%s", message.c_str());
 		this->busy = false;
-		return true;
+		return false;
 	}
 
 	success = true;
@@ -858,6 +910,7 @@ void SimpleOffboard::publishSetpoint(const rclcpp::Time& stamp, bool auto_arm) {
     }
 
     if (auto_arm) {
+        RCLCPP_INFO(this->get_logger(), "Auto Arm, waiting for offboard and arm");
         this->wait_for_offboard(); // Check offboard
         this->wait_for_arm();      // Arm drone
         this->wait_armed = false;
@@ -1030,7 +1083,11 @@ bool SimpleOffboard::land(std::shared_ptr<std_srvs::srv::Trigger::Request> req, 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<SimpleOffboard>());
+    auto offboard = std::make_shared<SimpleOffboard>();
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(offboard);
+    executor.spin();
+    // rclcpp::spin(std::make_shared<SimpleOffboard>());
     rclcpp::shutdown();
     return 0;
 }
