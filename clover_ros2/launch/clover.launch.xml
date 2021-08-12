@@ -11,4 +11,8 @@
         <arg name="simulator" value="$(var simulator)"/>
     </include>
 
+    <!-- Simple Offboard -->
+    <include file="$(find-pkg-share clover_ros2)/launch/simple_offboard.launch.xml">
+    </include>
+
 </launch>
