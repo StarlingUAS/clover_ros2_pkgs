@@ -369,6 +369,10 @@ void SimpleOffboard::sendSetModeRequest(string custom_mode) {
 }
 
 void SimpleOffboard::wait_for_offboard(){
+    if (this->state->mode == "OFFBOARD") {
+        RCLCPP_INFO(this->get_logger(), "Already Offboard Mode");
+        return;
+    }
     RCLCPP_INFO(this->get_logger(), "Sending OFFBOARD Request");
     this->sendSetModeRequest("OFFBOARD");
 
@@ -385,6 +389,10 @@ void SimpleOffboard::wait_for_offboard(){
 }
 
 void SimpleOffboard::wait_for_arm(){
+    if (this->state->armed) {
+        RCLCPP_INFO(this->get_logger(), "Already Armed");
+        return;
+    }
 
     RCLCPP_INFO(this->get_logger(), "Sending ARM Request");
     auto sm = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
@@ -431,11 +439,11 @@ void SimpleOffboard::wait_for_land(){
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    RCLCPP_INFO(this->get_logger(), "Confirmed Landed");
+    RCLCPP_INFO(this->get_logger(), "Confirmed Land Mode");
 }
 
 bool SimpleOffboard::checkTransformExistsBlocking(const string& target_frame, const string& source_frame, const rclcpp::Time& time, const rclcpp::Duration& timeout) {
-    RCLCPP_INFO(this->get_logger(), "Testing transform from %s to %s", target_frame.c_str(), source_frame.c_str());
+    // RCLCPP_INFO(this->get_logger(), "Testing transform from %s to %s", target_frame.c_str(), source_frame.c_str());
     std::string error;
 
     while (this->now() - time < timeout) {
@@ -451,7 +459,7 @@ void SimpleOffboard::restartSetpointTimer() {
         this->setpoint_timer->cancel();
     }
     this->setpoint_timer = this->create_wall_timer(this->setpoint_rate, [this](){this->publish(this->now());});
-    RCLCPP_INFO(this->get_logger(), "Reset Setpoint timer");
+    RCLCPP_DEBUG(this->get_logger(), "Reset Setpoint timer");
 }
 
 PoseStamped SimpleOffboard::globalToLocal(double lat, double lon)
@@ -524,9 +532,11 @@ void SimpleOffboard::publish(const rclcpp::Time& stamp) {
 		// transform position and/or yaw
 		if (this->setpoint_type == NAVIGATE || this->setpoint_type == NAVIGATE_GLOBAL || this->setpoint_type == POSITION || this->setpoint_type == VELOCITY || this->setpoint_type == ATTITUDE) {
 			this->setpoint_position.header.stamp = stamp;
-            RCLCPP_INFO(this->get_logger(), "Transform from %s to %s", this->setpoint_position.header.frame_id.c_str(), this->local_frame.c_str());
+            // RCLCPP_INFO(this->get_logger(), "Transform from %s to %s", this->setpoint_position.header.frame_id.c_str(), this->local_frame.c_str());
+            // RCLCPP_INFO(this->get_logger(), "Setpoint is (%f, %f, %f)", this->setpoint_position.pose.position.x, this->setpoint_position.pose.position.y, this->setpoint_position.pose.position.z);
             this->checkTransformExistsBlocking(this->setpoint_position.header.frame_id, this->local_frame, this->now(), this->transform_timeout);
 			this->tf_buffer->transform(this->setpoint_position, this->setpoint_position_transformed, this->local_frame, std::chrono::duration_cast<std::chrono::nanoseconds>(this->transform_timeout));
+            // RCLCPP_INFO(this->get_logger(), "Setpoint Transformed is (%f, %f, %f)", this->setpoint_position_transformed.pose.position.x, this->setpoint_position_transformed.pose.position.y, this->setpoint_position_transformed.pose.position.z);
 		}
 
 		// transform velocity
@@ -588,7 +598,7 @@ void SimpleOffboard::publish(const rclcpp::Time& stamp) {
 			this->transform_broadcaster->sendTransform(this->setpoint);
 		}
 
-        RCLCPP_INFO(this->get_logger(), "finished setpoint frame publishing");
+        // RCLCPP_INFO(this->get_logger(), "Currently at (%f, %f, %f), going to (%f, %f, %f)", this->local_position->pose.position.x, this->local_position->pose.position.y, this->local_position->pose.position.z, this->position_msg.pose.position.x, this->position_msg.pose.position.y, this->position_msg.pose.position.z);
 	}
 
     if (this->setpoint_type == ATTITUDE) {
@@ -663,25 +673,19 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
 {
     auto stamp = this->now();
 
-    RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE");
     try {
         if (this->busy)
 			throw std::runtime_error("Busy");
 
 		this->busy = true;
 
-        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE1");
-
         // Checks
         this->checkState();
-
-        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE1");
 
         if (auto_arm && this->manual_control) {
             this->checkManualControl();
         }
 
-        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE2");
         // default frame is local frame
         if (frame_id.empty())
             frame_id = this->local_frame;
@@ -691,8 +695,6 @@ bool SimpleOffboard::serve(enum setpoint_type_t sp_type, float x, float y, float
         const string& reference_frame = search == reference_frames.end() ? frame_id: search->second;
 
         bool skip = false;
-
-        RCLCPP_INFO(this->get_logger(), "GOT HERE TOP OF SERVE2");
 
         // Serve "partial" commands
         if (!auto_arm && std::isfinite(yaw) &&
@@ -1013,30 +1015,37 @@ bool SimpleOffboard::getTelemetry(std::shared_ptr<GetTelemetry::Request> req, st
 }
 
 bool SimpleOffboard::navigate(std::shared_ptr<Navigate::Request> req, std::shared_ptr<Navigate::Response> res) {
+    RCLCPP_INFO(this->get_logger(), "Received Navigate Request to (%f, %f, %f, yaw: %f) speed: %f, frame: %s, auto_arm: %s", req->x, req->y, req->z, req->yaw, req->speed, req->frame_id.c_str(), req->auto_arm?"true":"false");
 	return this->serve(NAVIGATE, req->x, req->y, req->z, NAN, NAN, NAN, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, NAN, NAN, NAN, req->speed, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::navigateGlobal(std::shared_ptr<NavigateGlobal::Request> req, std::shared_ptr<NavigateGlobal::Response> res) {
+    RCLCPP_INFO(this->get_logger(), "Received Navigate Global Request to (lat: %f, lon: %f, z: %f, yaw: %f) speed: %f, frame: %s, auto_arm: %s", req->lat, req->lon, req->z, req->yaw, req->speed, req->frame_id.c_str(), req->auto_arm?"true":"false");
     return this->serve(NAVIGATE_GLOBAL, NAN, NAN, req->z, NAN, NAN, NAN, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, req->lat, req->lon, NAN, req->speed, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setPosition(std::shared_ptr<SetPosition::Request> req, std::shared_ptr<SetPosition::Response> res) {
+    RCLCPP_INFO(this->get_logger(), "Received Set Position Request to (%f, %f, %f, yaw: %f), frame: %s, auto_arm: %s", req->x, req->y, req->z, req->yaw, req->frame_id.c_str(), req->auto_arm?"true":"false");
 	return this->serve(POSITION, req->x, req->y, req->z, NAN, NAN, NAN, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, NAN, NAN, NAN, NAN, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setVelocity(std::shared_ptr<SetVelocity::Request> req, std::shared_ptr<SetVelocity::Response> res) {
+    RCLCPP_INFO(this->get_logger(), "Received Set Velocity Request to (%f, %f, %f, yaw: %f), frame: %s, auto_arm: %s", req->vx, req->vy, req->vz, req->yaw, req->frame_id.c_str(), req->auto_arm?"true":"false");
 	return this->serve(VELOCITY, NAN, NAN, NAN, req->vx, req->vy, req->vz, NAN, NAN, req->yaw, NAN, NAN, req->yaw_rate, NAN, NAN, NAN, NAN, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setAttitude(std::shared_ptr<SetAttitude::Request> req, std::shared_ptr<SetAttitude::Response> res) {
+    RCLCPP_INFO(this->get_logger(), "Received Set Attitude Request to (p: %f, r: %f, y: %f, thrust: %f), frame: %s, auto_arm: %s", req->pitch, req->roll, req->yaw, req->thrust, req->frame_id.c_str(), req->auto_arm?"true":"false");
 	return this->serve(ATTITUDE, NAN, NAN, NAN, NAN, NAN, NAN, req->pitch, req->roll, req->yaw, NAN, NAN, NAN, NAN, NAN, req->thrust, NAN, req->frame_id, req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::setRates(std::shared_ptr<SetRates::Request> req, std::shared_ptr<SetRates::Response> res) {
+    RCLCPP_INFO(this->get_logger(), "Received Set Rates Request to (p: %f, r: %f, y: %f, thrust: %f), auto_arm: %s", req->pitch_rate, req->roll_rate, req->yaw_rate, req->thrust, req->auto_arm?"true":"false");
 	return this->serve(RATES, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, req->pitch_rate, req->roll_rate, req->yaw_rate, NAN, NAN, req->thrust, NAN, "", req->auto_arm, res->success, res->message);
 }
 
 bool SimpleOffboard::land(std::shared_ptr<std_srvs::srv::Trigger::Request> req, std::shared_ptr<std_srvs::srv::Trigger::Response> res) {
+    RCLCPP_INFO(this->get_logger(), "Received Land Request");
     try {
 		if (this->busy)
 			throw std::runtime_error("Busy");
@@ -1062,11 +1071,15 @@ bool SimpleOffboard::land(std::shared_ptr<std_srvs::srv::Trigger::Request> req, 
             RCLCPP_INFO(this->get_logger(), "service not available, waiting again...");
         }
 
-        auto result = this->set_mode->async_send_request(sm);
-        // Wait for the result.
-        // if (rclcpp::spin_until_future_complete(this, result) != rclcpp::FutureReturnCode::SUCCESS){
-        //     RCLCPP_ERROR(this->get_logger(), "Failed to call service set mode");
-        // }
+        auto result_future = this->set_mode->async_send_request(sm);
+        if (result_future.wait_for(std::chrono::duration<double>(10.0)) != std::future_status::ready)
+        {
+            RCLCPP_ERROR(this->get_logger(), "Landing service call failed :(");
+            throw std::runtime_error("Landing Service call failed");
+            return 0;
+        }
+
+        auto result = result_future.get();
 
 		this->wait_for_land();
         busy = false;
@@ -1087,7 +1100,6 @@ int main(int argc, char **argv)
     rclcpp::executors::MultiThreadedExecutor executor;
     executor.add_node(offboard);
     executor.spin();
-    // rclcpp::spin(std::make_shared<SimpleOffboard>());
     rclcpp::shutdown();
     return 0;
 }
