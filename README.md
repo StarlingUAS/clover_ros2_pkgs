@@ -1,24 +1,40 @@
-# Clover Core Libraries support for ROS2 
+# Clover Core Libraries support for ROS2
 
 This is a ROS2 port of the libraries written by CopterExpress for use with the Clover Drone Platform. In particular the following:
 
 - The `clover` library from their [clover project](https://github.com/CopterExpress/clover)
-- The `ros_led` project [ros_led](https://github.com/CopterExpress/ros_led). 
+- The `ros_led` project [ros_led](https://github.com/CopterExpress/ros_led).
 
 ## Packages
 
 - **clover_ros2**: a selection of the core clover libraries ported to ROS2
 - **led_msgs**: the led_msgs from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
 - **led_msgs_test**: Python ROS2 testing for led_msgs from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
-- **ws281x**: led drivers ros2 nodes from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2 
+- **ws281x**: led drivers ros2 nodes from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
 - **ws281x_test** test package for ws281x drivers
 
 ## Clover ROS2
 
 This is a port of some of the core source files of the clover packages. We only port the files which are relevant to the sensor. We do not need the control node as that is handled by mavros for us.
 
+### *simple_offboard* Node
+This node is intended to simplify the programming of autonomous drone flight (`OFFBOARD` flight mode). It allows the setting of desired flight tasks and automatically transforms coordinates between frames. It is a high level system for interacting with the flight controller.
+
+This is a direct port of the `simple_offboard` module from the clover project. See the following documentation from [Coex](https://clover.coex.tech/en/simple_offboard.html).
+
+The node advertises the following set of services:
+
+- `get_telemetry` (srv/GetTelemetry) - Returns telemetry
+- `navigate` (srv/Navigate) - Navigate to a position relative to a frame of reference (e.g. map or body)
+- `navigate_global` (srv/NavigateGlobal) - Navigate to a postiion lat long relative to frame of reference
+- `set_position` (srv/SetPosition) - Set the setpoint for position and yaw for continuous flow of target points
+- `set_velocity` (srv/SetVelocity) - Set speed and yaw setpoints
+- `set_attitude` (srv/SetAttidue) - Set pitch, roll, yaw and throttle levels for lower level control
+- `set_rates` (srv/SetRates) - Set pitch, roll, yaw rates and throttle levels for lower level control
+- `land` (std_srvs/srv/Trigger) - Switch drone to landing mode.
+
 ### *clover_led* Node
-This node controls higher level and more complex functionality of the led lights. It exposes the `set_effect` service which takes a clover `setEffect` message. 
+This node controls higher level and more complex functionality of the led lights. It exposes the `set_effect` service which takes a clover `setEffect` message.
 
 ```
 string effect
@@ -39,8 +55,8 @@ where the `effect` parameter can be one of the following:
 - `blink`: blink colour at a `blink_rate` parameter
 - `blink_fast`: blink colour at a `blink_fast_rate` parameter
 - `fade`: performs a fade from current colour to next colour at a `fade_period` parameter
-- `wipe`: performs a wipe from current colour to next colour at a `wipe_period` parameter 
-- `flash`: flashes the colour `flash_number` amount of times with `flash_period` time inbetween. Then returns to previous effect if fill, fade or wipe 
+- `wipe`: performs a wipe from current colour to next colour at a `wipe_period` parameter
+- `flash`: flashes the colour `flash_number` amount of times with `flash_period` time inbetween. Then returns to previous effect if fill, fade or wipe
 - `rainbow_fill`: fills the leds with rainbow
 - `rainbow`: fills the led with rainbow
 
@@ -58,9 +74,9 @@ This node automatically attempts to subscribe to the `mavros/state` topic. When 
 
 ### Custom LED ROS messages (led_msgs package)
 
-This is a port of the led_msgs ros1 package written by CopterExpress. See the original [files here](https://github.com/CopterExpress/ros_led/tree/master/led_msgs). 
+This is a port of the led_msgs ros1 package written by CopterExpress. See the original [files here](https://github.com/CopterExpress/ros_led/tree/master/led_msgs).
 
-This is organised as an `ament_cpp` project so the python test file had to be moved to a separate ROS package. 
+This is organised as an `ament_cpp` project so the python test file had to be moved to a separate ROS package.
 
 > Note: custom msg/srv/actions cannot currently be included in `ament_python` build project (13/05/2021)
 

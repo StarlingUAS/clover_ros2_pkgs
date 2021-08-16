@@ -21,6 +21,12 @@ COPY clover_ros2 /ros_ws/src/clover_ros2
 
 WORKDIR /ros_ws
 
+## Ensure geographiclib is properly installed with FindGeographicLib available
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
+    && . install/setup.bash \
+    && ros2 run mavros install_geographiclib_datasets.sh \
+    && ln -s /usr/share/cmake/geographiclib/FindGeographicLib.cmake /usr/share/cmake-3.16/Modules/
+
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
     && export CMAKE_PREFIX_PATH=$AMENT_PREFIX_PATH:$CMAKE_PREFIX_PATH \
     && cd /ros_ws \
