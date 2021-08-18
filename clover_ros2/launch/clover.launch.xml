@@ -18,7 +18,7 @@
 
     <!-- vl53l1x ToF rangefinder -->
     <node name="rangefinder" pkg="vl53l1x" exec="vl53l1x_node" output="screen" if="$(eval '\'$(var rangefinder_vl53l1x)\'==\'true\' and not \'$(var simulator)\'==\'true\'')">
-        <param name="frame_id" value="rangefinder"/>
+        <param name="frame_id" value="lidarlite_laser"/>
         <param name="min_signal" value="0.4"/>
         <param name="pass_statuses" value="[0, 6, 7, 11]"/>
     </node>
