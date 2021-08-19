@@ -2,17 +2,25 @@
 <launch>
 
     <arg name="led" default="true"/>
+    <arg name="rangefinder_vl53l1x" default="true"/>
 
     <!-- flag that we are operating on a simulated drone -->
     <arg name="simulator" default="false"/>
+
+    <!-- Simple Offboard -->
+    <include file="$(find-pkg-share clover_ros2)/launch/simple_offboard.launch.xml">
+    </include>
 
     <!-- led strip -->
     <include file="$(find-pkg-share clover_ros2)/launch/led.launch.xml" if="$(var led)">
         <arg name="simulator" value="$(var simulator)"/>
     </include>
 
-    <!-- Simple Offboard -->
-    <include file="$(find-pkg-share clover_ros2)/launch/simple_offboard.launch.xml">
-    </include>
+    <!-- vl53l1x ToF rangefinder -->
+    <node name="rangefinder" pkg="vl53l1x" exec="vl53l1x_node" output="screen" if="$(eval '\'$(var rangefinder_vl53l1x)\'==\'true\' and not \'$(var simulator)\'==\'true\'')">
+        <param name="frame_id" value="lidarlite_laser"/>
+        <param name="min_signal" value="0.4"/>
+        <param name="pass_statuses" value="[0, 6, 7, 11]"/>
+    </node>
 
 </launch>

@@ -4,6 +4,47 @@ This is a ROS2 port of the libraries written by CopterExpress for use with the C
 
 - The `clover` library from their [clover project](https://github.com/CopterExpress/clover)
 - The `ros_led` project [ros_led](https://github.com/CopterExpress/ros_led).
+- The `vl53l1x` project [vl53l1x_ros2](https://github.com/mhl787156/vl53l1x_ros2)
+
+## Installation
+
+### Local Development
+
+Download the repository into your ros2 development workspace:
+```
+cd ~/dev_ws/src
+git clone --recurse-submodules https://github.com/UoBFlightLab/clover_ros2_pkgs
+```
+
+Then build using colcon
+```bash
+cd ~/dev_ws/
+colcon build
+# Or specific packages using `colcon build --packages-select clover_ros2`
+```
+
+### Docker
+
+This project is also available as the `starling-clover` docker container for both amd64 and arm64 as part of [**Project Starling**](https://github.com/UoBFlightLab/ProjectStarling).
+
+```
+docker pull uobflightlabstarling/starling-clover:latest
+docker run -it --rm --name clover --network=host uobflightlabstarling/starling-clover
+```
+
+This container also include mavros and will run `clover.launch.xml`. It is recommended that you run with `network=host` to enable ROS2 communication.
+
+See [**Project Starling**](https://github.com/UoBFlightLab/ProjectStarling) for more details.
+
+## Running
+
+Make sure the local setup is sourced: `source install/setup.bash`
+
+Everything can be run wiht the following:
+
+```bash
+ros2 launch clover_ros2 clover.launch.xml
+```
 
 ## Packages
 
@@ -12,6 +53,7 @@ This is a ROS2 port of the libraries written by CopterExpress for use with the C
 - **led_msgs_test**: Python ROS2 testing for led_msgs from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
 - **ws281x**: led drivers ros2 nodes from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
 - **ws281x_test** test package for ws281x drivers
+- **vl53l1x_ros2** rangefinder driver ros2 nodes from [vl53l1x_ros2](https://github.com/mhl787156/vl53l1x_ros2). Note that this is a git submodule. See the README in the module itself for further details.
 
 ## Clover ROS2
 
@@ -87,6 +129,14 @@ This is a port of the WS281x ROS1 package written by CopterExpress. See the orig
 This is the LED strip used on the Clover Drone platform
 
 This package contains the WS281x LED strip driver for ROS (on a rapsberry pi). Based on the [rpi_ws281x library](https://github.com/jgarff/rpi_ws281x)
+
+## Rangefinder
+
+### vl53l1x Rangefinder support for ROS2
+
+This is STM [VL53L1X](https://www.st.com/en/imaging-and-photonics-solutions/vl53l1x.html) time-of-flight rangefinder driver for ROS2. Tested on a Raspberry Pi 3 and 4 with [CJMCU-531](https://ru.aliexpress.com/item/VL53L1X/32911692450.html) board.
+
+See the [project here](https://github.com/mhl787156/vl53l1x_ros2) for more details. This is a ROS2 port of the [original project here](https://github.com/okalachev/vl53l1x_ros).
 
 ## License
 
