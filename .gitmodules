@@ -1,3 +1,6 @@
 [submodule "vl53l1x_ros2"]
 	path = vl53l1x_ros2
 	url = https://github.com/mhl787156/vl53l1x_ros2.git
+[submodule "starling_simple_offboard"]
+	path = starling_simple_offboard
+	url = https://github.com/mhl787156/starling_simple_offboard.git

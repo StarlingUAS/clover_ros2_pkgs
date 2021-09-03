@@ -8,7 +8,7 @@
     <arg name="simulator" default="false"/>
 
     <!-- Simple Offboard -->
-    <include file="$(find-pkg-share clover_ros2)/launch/simple_offboard.launch.xml">
+    <include file="$(find-pkg-share simple_offboard)/launch/simple_offboard.launch.xml">
     </include>
 
     <!-- led strip -->

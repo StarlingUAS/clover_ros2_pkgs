@@ -24,27 +24,17 @@ find_package(rclcpp  REQUIRED)
 find_package(led_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
-find_package(tf2 REQUIRED)
-find_package(tf2_ros REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosgraph_msgs REQUIRED)
 find_package(mavros_msgs REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
-find_package(GeographicLib REQUIRED)
+find_package(simple_offboard_msgs)
 
 # Build Messages and Services
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "srv/GetTelemetry.srv"
-  "srv/Navigate.srv"
-  "srv/NavigateGlobal.srv"
-  "srv/SetPosition.srv"
-  "srv/SetVelocity.srv"
-  "srv/SetAttitude.srv"
-  "srv/SetRates.srv"
   "srv/SetLEDEffect.srv"
   "srv/Execute.srv"
 )
@@ -54,15 +44,7 @@ ament_export_dependencies(rosidl_default_runtime)
 add_executable(led src/led.cpp)
 ament_target_dependencies(led
   rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs mavros_msgs)
-add_executable(simple_offboard src/simple_offboard.cpp)
 rosidl_target_interfaces(led ${PROJECT_NAME} "rosidl_typesupport_cpp")
-
-ament_target_dependencies(simple_offboard
-  rclcpp std_msgs tf2 tf2_ros tf2_geometry_msgs std_srvs
-  geometry_msgs sensor_msgs mavros_msgs GeographicLib
-)
-rosidl_target_interfaces(simple_offboard ${PROJECT_NAME} "rosidl_typesupport_cpp")
-
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -85,7 +67,6 @@ install(DIRECTORY
 
 install(TARGETS
   led
-  simple_offboard
   DESTINATION lib/${PROJECT_NAME}
 )
 
