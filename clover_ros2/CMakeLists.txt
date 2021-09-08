@@ -29,7 +29,6 @@ find_package(geometry_msgs REQUIRED)
 find_package(rosgraph_msgs REQUIRED)
 find_package(mavros_msgs REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
-find_package(simple_offboard_msgs)
 
 # Build Messages and Services
 find_package(rosidl_default_generators REQUIRED)

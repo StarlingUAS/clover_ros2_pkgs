@@ -29,9 +29,6 @@
   <depend>vl53l1x</depend>
   <depend>mavros_msgs</depend>
 
-  <exec_depend>simple_offboard</exec_depend>
-  <!-- <depend>mavros_extras</depend> -->
-
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
