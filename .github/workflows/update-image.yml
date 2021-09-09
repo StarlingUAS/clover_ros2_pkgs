@@ -41,7 +41,7 @@ jobs:
         uses: docker/bake-action@master
         with:
           files: |
-            ./buildtools/docker-bake.hcl
+            ./docker-bake.hcl
           targets: |
             starling-clover
           push: true
