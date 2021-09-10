@@ -4,3 +4,4 @@
 [submodule "starling_simple_offboard"]
 	path = starling_simple_offboard
 	url = https://github.com/mhl787156/starling_simple_offboard.git
+	branch = main

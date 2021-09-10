@@ -26,6 +26,14 @@ variable "BAKE_CACHETO_NAME" {
     default = ""
 }
 
+/*
+ * Groups for target ordering
+ */
+group "stage1" {
+    targets = ["starling-clover"]
+}
+
+
 target "starling-clover" {
     context = "."
     tags = [
