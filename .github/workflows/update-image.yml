@@ -1,52 +1,63 @@
 name: 'Update images'
 
-on:
-  # Triggers on push to any tag of form vX.X.X
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+on: [push]
 
 jobs:
-   #
-  # Call bake for each controller image in sequence
-  #
-  bake_controller:
+
+  bump_version:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{steps.tag_version.outputs.new_tag}}
+      is_release: ${{steps.tag_version.outputs.is_release}}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
         with:
-          submodules: 'recursive'
-
-      - name: Get tag name
-        id: tag_name
-        run: |
-          echo ::set-output name=GITHUB_TAG::${GITHUB_REF#refs/tags/}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-        with:
-          platforms: arm64
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push (starling-clover)
-        uses: docker/bake-action@master
-        with:
-          files: |
-            ./docker-bake.hcl
-          targets: |
-            starling-clover
-          push: true
+          fetch-depth: '1'
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mhl787156/github-tag-action@master
         env:
-          BAKE_VERSION: ${{ steps.tag_name.outputs.GITHUB_TAG }}
-          BAKE_RELEASENAME: latest
-          BAKE_CACHETO_NAME: cache
-          BAKE_CACHEFROM_NAME: cache
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          RELEASE_BRANCHES: master,main
+          DEFAULT_BUMP: patch
+          DEFAULT_PRERELEASE_BUMP: none
+          DRY_RUN: true # Dont push new tag here, only push on successful build
+          PRERELEASE_SUFFIX: ${{ steps.extract_branch.outputs.branch }}
+      
+  bake_images:
+    runs-on: ubuntu-latest
+    needs: bump_version
+    strategy:
+      matrix:
+        targets: [starling-clover]
+    steps:
+      - name: Build Image
+        uses: mhl787156/starling-bake-build-action@main
+        with:
+          bakefile: ./buildtools/docker-bake.hcl
+          target: ${{ matrix.targets }}
+          tag: ${{ needs.bump_version.outputs.tag }}
+          dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_password: ${{ secrets.DOCKERHUB_TOKEN }}
+          build_arm64: false
+
+  release_version:
+    needs: [bump_version, bake_images]
+    runs-on: ubuntu-latest
+    steps:  
+      - name: Create a GitHub release
+        uses: ncipollo/release-action@v1
+        if: |
+          !failure() && !cancelled() && success() &&
+          needs.bump_version.outputs.is_release == 'true'
+        with:
+          tag: ${{ needs.bump_version.outputs.tag }}
+          name: Release ${{ needs.bump_version.outputs.tag }}
+          allowUpdates: true
+
+          

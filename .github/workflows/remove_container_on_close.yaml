@@ -1,0 +1,28 @@
+name: Close Pull Request and Delete Testing Image
+
+# only trigger on pull request closed events except for master and dev
+on:
+  pull_request:
+    types: [ closed ]
+    branches-ignore:
+      - master
+      - dev
+  delete:
+    branches-ignore:
+      - master
+      - dev
+
+jobs:
+  remove_images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Image
+        uses: mhl787156/dockerhub-delete-tag-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          organisation: uobflightlabstarling
+          image: starling-clover
+          tag: ${{github.event.pull_request.head.ref}}
+
+
