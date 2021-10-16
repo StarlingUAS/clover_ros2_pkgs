@@ -44,7 +44,7 @@ jobs:
           tag: ${{ needs.bump_version.outputs.tag }}
           dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_password: ${{ secrets.DOCKERHUB_TOKEN }}
-          build_arm64: false
+          build_arm64: true
 
   release_version:
     needs: [bump_version, bake_images]
