@@ -13,6 +13,7 @@
 
 using namespace std::chrono_literals;
 
+
 class CloverLEDController : public rclcpp::Node
 {
     public:
@@ -26,8 +27,6 @@ class CloverLEDController : public rclcpp::Node
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
 		void setEffectRaw(std::string eff, int r, int g, int b, float brightness=255.0, float duration=-1.0, bool notify=false);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
-        void notify(const std::string& event);
-        void handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg);
 
     private:
         std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
@@ -103,10 +102,10 @@ CloverLEDController::CloverLEDController() :
         "led_state", 10,
         std::bind(&CloverLEDController::handleState, this, std::placeholders::_1)
     );
-	this->mavros_state_sub = this->create_subscription<mavros_msgs::msg::State>(
-		"mavros/state", 10,
-		std::bind(&CloverLEDController::handleMavrosState, this, std::placeholders::_1)
-	);
+	// this->mavros_state_sub = this->create_subscription<mavros_msgs::msg::State>(
+	// 	"mavros/state", 10,
+	// 	std::bind(&CloverLEDController::handleMavrosState, this, std::placeholders::_1)
+	// );
     this->set_effect = this->create_service<clover_ros2::srv::SetLEDEffect>(
         "set_effect",
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)
@@ -413,67 +412,38 @@ void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r, flo
 	this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
 }
 
-void CloverLEDController::notify(const std::string& event)
-{	
-	RCLCPP_INFO(this->get_logger(), "Notify called with event: %s", event.c_str());
-	if (event == "armed") {
-		this->setEffectRaw("fade", 0, 0, 255, 255, 2, true);
-	} else if (event == "disarmed") {
-		this->setEffectRaw("fade", 0, 0, 0,  255, 2, true);
-	} else if (event == "acro") {
-		this->setEffectRaw("", 0, 155, 245, 255, 2, true);
-	} else if (event == "altctl") {
-		this->setEffectRaw("", 40, 255, 255,255, 2, true);
-	} else if (event == "connected") {
-		this->setEffectRaw("rainbow", 0, 0, 0, 255,2, true);
-	} else if (event == "disconnected") {
-		this->setEffectRaw("blink", 50, 50, 255, 255,2, true);
-	} else if (event == "error") {
-		this->setEffectRaw("flash", 0, 0, 255, 255,2, true);
-	} else if (event == "low_battery") {
-		this->setEffectRaw("blink_fast", 0, 0, 255,255, 2, true);
-	} else if (event == "offboard") {
-		this->setEffectRaw("wipe", 255, 20, 220,255, 2, true);
-	} else if (event == "manual") {
-		this->setEffectRaw("wipe", 0, 0, 0, 255, 2, true);
-	} else if (event == "posctl") {
-		this->setEffectRaw("wipe", 220, 100, 50,255, 2, true);
-	} else if (event == "stabilized") {
-		this->setEffectRaw("wipe", 50, 180, 30, 255, 2, true);
-	} else if (event == "startup") {
-		this->setEffectRaw("", 255, 255, 255, 255, 2, true);
-	}
-}
+// void CloverLEDController::notify(const std::string& event)
+// {	
+// 	RCLCPP_INFO(this->get_logger(), "Notify called with event: %s", event.c_str());
+// 	if (event == "armed") {
+// 		this->setEffectRaw("fade", 0, 0, 255, 255, 2, true);
+// 	} else if (event == "disarmed") {
+// 		this->setEffectRaw("fade", 0, 0, 0,  255, 2, true);
+// 	} else if (event == "acro") {
+// 		this->setEffectRaw("", 0, 155, 245, 255, 2, true);
+// 	} else if (event == "altctl") {
+// 		this->setEffectRaw("", 40, 255, 255,255, 2, true);
+// 	} else if (event == "connected") {
+// 		this->setEffectRaw("rainbow", 0, 0, 0, 255,2, true);
+// 	} else if (event == "disconnected") {
+// 		this->setEffectRaw("blink", 50, 50, 255, 255,2, true);
+// 	} else if (event == "error") {
+// 		this->setEffectRaw("flash", 0, 0, 255, 255,2, true);
+// 	} else if (event == "low_battery") {
+// 		this->setEffectRaw("blink_fast", 0, 0, 255,255, 2, true);
+// 	} else if (event == "offboard") {
+// 		this->setEffectRaw("wipe", 255, 20, 220,255, 2, true);
+// 	} else if (event == "manual") {
+// 		this->setEffectRaw("wipe", 0, 0, 0, 255, 2, true);
+// 	} else if (event == "posctl") {
+// 		this->setEffectRaw("wipe", 220, 100, 50,255, 2, true);
+// 	} else if (event == "stabilized") {
+// 		this->setEffectRaw("wipe", 50, 180, 30, 255, 2, true);
+// 	} else if (event == "startup") {
+// 		this->setEffectRaw("", 255, 255, 255, 255, 2, true);
+// 	}
+// }
 
-void CloverLEDController::handleMavrosState(const mavros_msgs::msg::State::SharedPtr msg)
-{
-	if (!this->mavros_state){
-		this->mavros_state = msg;
-		return;
-	}
-
-	if (msg->connected && !this->mavros_state->connected) {
-		notify("connected");
-	} else if (!msg->connected && this->mavros_state->connected) {
-		notify("disconnected");
-	} else if (msg->armed && !this->mavros_state->armed) {
-		notify("armed");
-	} else if (!msg->armed && this->mavros_state->armed) {
-		notify("disarmed");
-	} else if (msg->mode != this->mavros_state->mode) {
-		// mode changed
-		std::string mode = boost::algorithm::to_lower_copy(msg->mode);
-		if (mode.find(".") != std::string::npos) {
-			// remove the part before "."
-			mode = mode.substr(mode.find(".") + 1);
-		}
-		// std::string err;
-		// if (ros::names::validate(mode, err)) {
-		this->notify(mode);
-		// }
-	}
-	this->mavros_state = msg;
-}
 
 int main(int argc, char **argv)
 {

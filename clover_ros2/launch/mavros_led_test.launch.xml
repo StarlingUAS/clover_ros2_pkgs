@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+
+
+    <!-- high level led effects control, events notification with leds -->
+    <node pkg="clover_ros2" name="mavros_led" exec="mavros_led" ns="led" output="screen">
+        <!-- events effects table -->
+        <param from="$(find-pkg-share clover_ros2)/config/notify_params.yaml"/>
+    </node>
+</launch>

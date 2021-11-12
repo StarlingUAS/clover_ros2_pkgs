@@ -1,45 +1,41 @@
-led_effect:
+mavros_led:
   ros__parameters:
-    notify: 
+    events: 
+      no_mavros:
+        r: "255"
       acro: 
-        b: 0
-        g: 155
-        r: 245
+        b: "0"
+        g: "155"
+        r: "245"
       altctl: 
-        b: 40
-        g: 255
-        r: 255
+        b: "40"
+        g: "255"
+        r: "255"
       connected: 
         effect: rainbow
       disconnected: 
-        b: 50
+        b: "50"
         effect: blink
-        g: 50
-        r: 255
+        g: "50"
+        r: "255"
       error: 
-        b: 0
+        b: "0"
         effect: flash
-        g: 0
-        r: 255
-      low_battery: 
-        b: 0
-        effect: blink_fast
-        g: 0
-        r: 255
-        threshold: 3.6
+        g: "0"
+        r: "255"
       offboard: 
-        b: 250
-        g: 20
-        r: 220
+        b: "250"
+        g: "20"
+        r: "220"
       posctl: 
-        b: 220
-        g: 100
-        r: 50
+        b: "220"
+        g: "100"
+        r: "50"
       stabilized: 
-        b: 50
-        g: 180
-        r: 30
+        b: "50"
+        g: "180"
+        r: "30"
       startup: 
-        b: 255
-        g: 255
-        r: 255
+        b: "255"
+        g: "255"
+        r: "255"
