@@ -1,5 +1,7 @@
 #include <chrono>
 #include <memory>
+#include <vector>
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
 
 #include "rclcpp/rclcpp.hpp"
@@ -13,28 +15,88 @@
 
 using namespace std::chrono_literals;
 
+const std::vector<std::string> VALID_EFFECTS = {
+	"fill",
+	"blink",
+	"blink_fast",
+	"fade",
+	"wipe",
+	"flash",
+	"rainbow_fill",
+	"rainbow"
+};
+
+class Effect {
+	public:
+		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect, rclcpp::Time curr_time)
+			:_effect(effect) {this->combine(std::make_shared<Effect>(effect), curr_time);}
+
+		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect, bool infinite)
+			:_effect(effect), _infinite(infinite){}
+
+		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect)
+			:_effect(effect), _infinite(true){}
+
+		bool operator<(const Effect& other) {
+			return this->_effect->priority < other._effect->priority;
+		}
+
+		bool operator==(const Effect& other) {
+			return this->_effect->effect == other._effect->effect &&
+				   this->_effect->r == other._effect->r &&
+				   this->_effect->g == other._effect->g &&
+				   this->_effect->b == other._effect->b &&
+				   this->_effect->priority == other._effect->priority;
+		}
+
+		void combine(const std::shared_ptr<Effect> other, rclcpp::Time curr_time) {
+			double duration = other->_effect->duration;
+			this->_effect = other->_effect;
+			if(duration == 0) {
+				this->_infinite = true;
+			} else {
+				this->_end_time = curr_time + std::chrono::duration<double>(duration);
+			}
+		}
+
+		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> get_effect() {
+			return this->_effect;
+		}
+
+		bool finished(rclcpp::Time curr_time) {
+			return !this->_infinite && curr_time > this->_end_time;
+		}
+
+		private:
+			std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> _effect;
+			rclcpp::Time _end_time;
+			bool _infinite = false;
+};
 
 class CloverLEDController : public rclcpp::Node
 {
     public:
         CloverLEDController();
+		~CloverLEDController();
         void callSetLeds();
         void rainbow(uint8_t n, uint8_t& r, uint8_t& g, uint8_t& b);
         void fill(uint8_t r, uint8_t g, uint8_t b);
 		void set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b);
         void proceed();
-		void endEffect();
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
 		void setEffectRaw(std::string eff, int r, int g, int b, float brightness=255.0, float duration=-1.0, bool notify=false);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
+		bool startEffect(std::shared_ptr<Effect> effect);
 
     private:
+		std::shared_ptr<Effect> base_effect;
+		std::vector<std::shared_ptr<Effect>> pq;
+		
+		std::shared_ptr<Effect> curr_effect;
         std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
-		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> prev_effect;
-		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> notify_effect;
         int led_count;
+
 		rclcpp::TimerBase::SharedPtr timer;
-		rclcpp::TimerBase::SharedPtr effect_duration_timer;
 		rclcpp::Time start_time;
 
         double blink_rate, blink_fast_rate, brightness, flash_delay, fade_period, wipe_period, rainbow_period;
@@ -43,6 +105,8 @@ class CloverLEDController : public rclcpp::Node
 		int flash_number;
 
 		bool notify_state;
+
+		uint32_t num_priority_levels;
 
         std::shared_ptr<led_msgs::srv::SetLEDs::Request> set_leds;
         std::shared_ptr<led_msgs::msg::LEDStateArray> state, start_state;
@@ -56,7 +120,6 @@ class CloverLEDController : public rclcpp::Node
         int counter;
 
 		void restartTimer(double seconds);
-		void restartEffectDurationTimer(double seconds);
 };
 
 CloverLEDController::CloverLEDController() : 
@@ -75,10 +138,12 @@ CloverLEDController::CloverLEDController() :
 	this->get_parameter_or("fade_period",this->fade_period, 0.5);
 	this->get_parameter_or("wipe_period",this->wipe_period, 0.5);
 	this->get_parameter_or("flash_delay",this->flash_delay, 0.1);
-	this->get_parameter_or("flash_number",this->flash_number, 3);
+	this->get_parameter_or("flash_number",this->flash_number, 1);
 	this->get_parameter_or("rainbow_period",this->rainbow_period, 5.0);
 	this->get_parameter_or("brightness", this->brightness, 64.0);
+		// res->message = "Effect already set, skip";
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
+	this->get_parameter_or("num_priority_levels", this->num_priority_levels, 9U);
 
 	// Initialise set leds
 	this->state = std::make_shared<led_msgs::msg::LEDStateArray>();
@@ -90,11 +155,13 @@ CloverLEDController::CloverLEDController() :
 	this->current_effect->g = 0;
 	this->current_effect->b = 0;
 
-	this->prev_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-	this->notify_state = false;
+	// Resize Queue with all initialised to nullptr
+	this->pq.resize(this->num_priority_levels, nullptr);
+
+	// New values
+	this->base_effect = std::make_shared<Effect>(std::make_shared<clover_ros2::srv::SetLEDEffect::Request>());
 
     // First need to wait for service
-    // ros::service::waitForService("set_leds"); // cannot work without set_leds service
     this->set_leds_srv = this->create_client<led_msgs::srv::SetLEDs>("set_leds");
     this->set_leds_srv->wait_for_service(10s);
 
@@ -102,19 +169,19 @@ CloverLEDController::CloverLEDController() :
         "led_state", 10,
         std::bind(&CloverLEDController::handleState, this, std::placeholders::_1)
     );
-	// this->mavros_state_sub = this->create_subscription<mavros_msgs::msg::State>(
-	// 	"mavros/state", 10,
-	// 	std::bind(&CloverLEDController::handleMavrosState, this, std::placeholders::_1)
-	// );
+
     this->set_effect = this->create_service<clover_ros2::srv::SetLEDEffect>(
         "set_effect",
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)
     );
 
 	this->restartTimer(0.5);
-	// this->timer = this->create_wall_timer(
-	// 	0s, std::bind(&CloverLEDController::proceed, this));
 	RCLCPP_INFO(this->get_logger(), "LED Effects Controller Initialised");
+}
+
+CloverLEDController::~CloverLEDController() {
+	// Destructor simply turns off lights.
+	this->setEffectRaw("", 0, 0, 0);
 }
 
 void CloverLEDController::restartTimer(double seconds) 
@@ -127,17 +194,6 @@ void CloverLEDController::restartTimer(double seconds)
 		std::bind(&CloverLEDController::proceed, this)
 	);
     RCLCPP_DEBUG(this->get_logger(), "Reset Timer to %f", seconds);
-}
-
-void CloverLEDController::restartEffectDurationTimer(double seconds)
-{
-	if (this->effect_duration_timer) {
-		this->effect_duration_timer->cancel();
-	}
-	this->effect_duration_timer = this->create_wall_timer(
-		std::chrono::duration<double>(seconds), 
-		std::bind(&CloverLEDController::endEffect, this)
-	);
 }
 
 void CloverLEDController::callSetLeds()
@@ -194,6 +250,35 @@ void CloverLEDController::handleState(const led_msgs::msg::LEDStateArray::Shared
 
 void CloverLEDController::proceed()
 {
+	rclcpp::Time curr_time = this->now();
+
+	// Check for current most prioritised effect
+	uint8_t p_idx = this->num_priority_levels - 1;
+	std::shared_ptr<Effect> effect;
+	for(auto it = this->pq.rbegin(); it != this->pq.rend(); ++it ) {
+		if(*it){effect = *it; break;}
+		p_idx--;
+	}
+
+	// Check if effect is found
+	if(effect) {
+		// Check if effect has expired, remove the effect from the queue
+		if(effect->finished(curr_time)) {
+			this->pq[p_idx] = nullptr;
+		}
+	} else {
+		// If no effect found, set effect to base effect
+		effect = this->base_effect;
+	}
+
+	// Check if effect is different from current effect
+	if(effect != this->curr_effect) {
+		// Parse and set state for new effect
+		this->startEffect(effect);
+	}
+
+	// Execute effect
+	this->current_effect = this->curr_effect->get_effect();
 	this->counter++;
 	uint8_t r, g, b;
 	this->set_leds->leds.clear();
@@ -266,20 +351,6 @@ void CloverLEDController::proceed()
 	}
 }
 
-void CloverLEDController::endEffect()
-{
-	if(this->notify_state && this->prev_effect) {
-		// If notify effect ends, reset back to previous effect
-		this->notify_state = false;
-		this->setEffect(this->prev_effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
-	} else {
-		// If normal effect ends, then set to blank
-		this->setEffectRaw("fill", 0, 0, 0);
-	}
-	// End the timer at the end of the effect
-	this->effect_duration_timer->cancel();
-}
-
 bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res)
 {
     res->success = true;
@@ -290,26 +361,53 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		req->effect.c_str(), req->r, req->g, req->b, req->brightness, req->duration, req->notify ? "true" : "false"
 	);
 
-	if(this->notify_state && !req->notify) {
-		// If currently notifying and a new non-notify request is sent, replace prev effect with the new effect
-		this->prev_effect = req; //
-		return true; // 
+	if(!req->priority) {
+		req->priority = 0;
 	}
 
-	if (req->brightness) {
-		// Set led brightness to requested
-		this->brightness = req->brightness;
+	if(req->priority > this->num_priority_levels) {
+		res->message = "Requested priority is greater than allowed priority";
+		res->success = false;
+		return false;
 	}
+
+	// If 'base' set, set base and clear queue
+	if(req->base || req->effect=="reset") {
+		if(req->base){this->base_effect = std::make_shared<Effect>(req);}
+		std::fill(this->pq.begin(), this->pq.end(), nullptr); // Probably should lock this...
+		res->message = "Queue emptied";
+		return true;
+	}
+
+	// Set Defaults
+	if (req->effect == "") {req->effect = "fill";}
+	if (!req->brightness) {this->brightness = req->brightness;}
+
+	// Check valid effect first
+	bool found = (std::find(VALID_EFFECTS.begin(), VALID_EFFECTS.end(), req->effect) != VALID_EFFECTS.end());
+	if(!found) {
+		res->message = "Unknown effect: " + req->effect + ". Available effects are fill, fade, wipe, blink, blink_fast, flash, rainbow, rainbow_fill.";
+		RCLCPP_ERROR(this->get_logger(), "%s", res->message.c_str());
+		return false;
+	}
+
+	// Overwrite the effect at priority or add to priority list. 
+	rclcpp::Time curr_time;
+	std::shared_ptr<Effect> new_effect = std::make_shared<Effect>(req, this->now());
+	this->pq[req->priority] = new_effect; 
+		
+	return true;
+}
+
+
+bool CloverLEDController::startEffect(std::shared_ptr<Effect> effect){
+
+	auto req = effect->get_effect();
 
 	///////////////
 	// Process effect
-	if (req->effect == "") {
-		req->effect = "fill";
-	}
-
 	if (req->effect != "flash" && req->effect != "fill" && this->current_effect->effect == req->effect &&
 	    this->current_effect->r == req->r && this->current_effect->g == req->g && this->current_effect->b == req->b) {
-		res->message = "Effect already set, skip";
 		return true;
 	}
 
@@ -354,38 +452,14 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		this->restartTimer(this->rainbow_period/255.0);
 
 	} else {
-		res->message = "Unknown effect: " + req->effect + ". Available effects are fill, fade, wipe, blink, blink_fast, flash, rainbow, rainbow_fill.";
-		RCLCPP_ERROR(this->get_logger(), "%s", res->message.c_str());
-		res->success = false;
+		RCLCPP_ERROR(this->get_logger(), "Should never get here");
 		return false;
 	}
 	// finish processing effects request
 	///////////////
 
-	if(req->notify && !req->duration) {
-		// If notify and a duration is not specified
-		// Notifications must always have a duration to ensure un-notication
-		req->duration = 2.0; 
-	}
-
-	if(req->duration) {
-		// If a duration is specified, start the effect timer. 
-		this->restartEffectDurationTimer(req->duration);
-	}
-
-	if(req->notify && !this->notify_state && this->current_effect) {
-		// If notify and currently not already notifying, save the current effect to return to
-		this->prev_effect = this->current_effect;
-	}
-
-	if (req->notify) {
-		// If request is a notify, set notify state
-		this->notify_state = true;
-	}
-
-
 	// set current effect
-	this->current_effect = req;
+	this->curr_effect = effect;
 	this->counter = 0;
 	this->start_state = this->state;
 	this->start_time = this->now();
@@ -411,38 +485,6 @@ void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r, flo
 	}
 	this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
 }
-
-// void CloverLEDController::notify(const std::string& event)
-// {	
-// 	RCLCPP_INFO(this->get_logger(), "Notify called with event: %s", event.c_str());
-// 	if (event == "armed") {
-// 		this->setEffectRaw("fade", 0, 0, 255, 255, 2, true);
-// 	} else if (event == "disarmed") {
-// 		this->setEffectRaw("fade", 0, 0, 0,  255, 2, true);
-// 	} else if (event == "acro") {
-// 		this->setEffectRaw("", 0, 155, 245, 255, 2, true);
-// 	} else if (event == "altctl") {
-// 		this->setEffectRaw("", 40, 255, 255,255, 2, true);
-// 	} else if (event == "connected") {
-// 		this->setEffectRaw("rainbow", 0, 0, 0, 255,2, true);
-// 	} else if (event == "disconnected") {
-// 		this->setEffectRaw("blink", 50, 50, 255, 255,2, true);
-// 	} else if (event == "error") {
-// 		this->setEffectRaw("flash", 0, 0, 255, 255,2, true);
-// 	} else if (event == "low_battery") {
-// 		this->setEffectRaw("blink_fast", 0, 0, 255,255, 2, true);
-// 	} else if (event == "offboard") {
-// 		this->setEffectRaw("wipe", 255, 20, 220,255, 2, true);
-// 	} else if (event == "manual") {
-// 		this->setEffectRaw("wipe", 0, 0, 0, 255, 2, true);
-// 	} else if (event == "posctl") {
-// 		this->setEffectRaw("wipe", 220, 100, 50,255, 2, true);
-// 	} else if (event == "stabilized") {
-// 		this->setEffectRaw("wipe", 50, 180, 30, 255, 2, true);
-// 	} else if (event == "startup") {
-// 		this->setEffectRaw("", 255, 255, 255, 255, 2, true);
-// 	}
-// }
 
 
 int main(int argc, char **argv)

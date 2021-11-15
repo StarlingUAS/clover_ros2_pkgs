@@ -63,6 +63,7 @@ MavrosLEDController::MavrosLEDController() :
 
     // Clients
     this->set_effect_client = this->create_client<clover_ros2::srv::SetLEDEffect>("set_effect");
+    this->set_effect_client->wait_for_service(10s);
 
     // Subscribers
     this->mavros_state_sub = this->create_subscription<mavros_msgs::msg::State>(
