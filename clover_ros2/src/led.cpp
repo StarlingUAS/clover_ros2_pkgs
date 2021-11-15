@@ -391,6 +391,17 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		return false;
 	}
 
+	// Special Case for flash
+	if(req->effect == "flash") {
+	auto _flash_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(this->flash_delay));
+		for(int i = 0; i < this->flash_number; i++){
+			this->fill(req->r, req->g, req->b);
+			rclcpp::sleep_for(_flash_delay);
+			this->fill(0, 0, 0);
+			rclcpp::sleep_for(_flash_delay);
+		}
+	}
+
 	// Overwrite the effect at priority or add to priority list. 
 	rclcpp::Time curr_time;
 	std::shared_ptr<Effect> new_effect = std::make_shared<Effect>(req, this->now());
@@ -426,26 +437,7 @@ bool CloverLEDController::startEffect(std::shared_ptr<Effect> effect){
 	} else if (req->effect == "wipe") {
 		this->restartTimer((double) this->wipe_period/(double) this->led_count);
 
-	} else if (req->effect == "flash") {
-		auto _flash_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(this->flash_delay));
-		for(int i = 0; i < this->flash_number; i++){
-			this->fill(req->r, req->g, req->b);
-			rclcpp::sleep_for(_flash_delay);
-			this->fill(0, 0, 0);
-			rclcpp::sleep_for(_flash_delay);
-		}
-		if (this->current_effect->effect == "fill"||
-		    this->current_effect->effect == "fade" ||
-		    this->current_effect->effect == "wipe") {
-			// restore previous filling
-			for (int i = 0; i < led_count; i++) {
-				this->fill(this->current_effect->r, this->current_effect->g, this->current_effect->b);
-			}
-			callSetLeds();
-		}
-		return true; // this effect happens only once
-
-	} else if (req->effect == "rainbow_fill") {
+	}  else if (req->effect == "rainbow_fill") {
 		this->restartTimer(this->rainbow_period/255.0);
 
 	} else if (req->effect == "rainbow") {
