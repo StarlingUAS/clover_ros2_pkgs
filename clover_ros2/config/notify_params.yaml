@@ -2,6 +2,10 @@ mavros_led:
   ros__parameters:
     events: 
       no_mavros:
+        effect: flash
+        b: "255"
+      emergency_stop_topic:
+        effect: flash
         r: "255"
       acro: 
         b: "0"
