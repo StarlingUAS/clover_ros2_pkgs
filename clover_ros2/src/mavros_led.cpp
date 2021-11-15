@@ -58,7 +58,7 @@ MavrosLEDController::MavrosLEDController() :
     this->get_parameter_or("mavros_timeout", timeout, 30.0);
     this->mavros_timeout = chrono::duration<double>(timeout);
 
-    this->get_parameter_or("connection_check_rate", timeout, 0.1);
+    this->get_parameter_or("connection_check_rate", timeout, 0.5);
     this->connection_check_rate = chrono::duration<double>(1.0/timeout);
 
     // Clients
@@ -76,9 +76,9 @@ MavrosLEDController::MavrosLEDController() :
     );
 
     // Timers
-    this->check_timer = this->create_wall_timer(this->connection_check_rate, [this](){this->check_connection_cb();});
     this->connected = false;
-
+    this->check_timer = this->create_wall_timer(this->connection_check_rate, [this](){this->check_connection_cb();});
+ 
 }
 
 void MavrosLEDController::parse_event_params() {
@@ -196,7 +196,7 @@ void MavrosLEDController::apply_event_effect(const string& event) {
         ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
         ledeffect->effect = "fill";
     }
-
+    RCLCPP_INFO(this->get_logger(), "Applying event effect: %s", event.c_str());
     this->send_effect(ledeffect);
 }
 
@@ -232,12 +232,14 @@ void MavrosLEDController::check_connection_cb() {
     if(this->connected){
         // Checks to do if connected
         if(this->now() - this->mavros_last_checked > this->mavros_timeout) {
+            RCLCPP_WARN(this->get_logger(), "Lost MAVROS Connection");
             this->connected = false;
         }
     }
 
     if(!this->connected) {
         // If not connected
+        RCLCPP_WARN(this->get_logger(), "MAVROS not connected");
         // Mavros Connection timed out, send 'no_mavros' colour
         this->apply_event_effect("no_mavros");
     }
