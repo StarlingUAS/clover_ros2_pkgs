@@ -165,13 +165,13 @@ void MavrosLEDController::handleMavrosState(const mavros_msgs::msg::State::Share
     }
 
 	if (msg->connected && !this->mavros_state->connected) {
-		// notify("connected");
+		this->apply_event_effect("connected");
 	} else if (!msg->connected && this->mavros_state->connected) {
-		// notify("disconnected");
+		this->apply_event_effect("disconnected");
 	} else if (msg->armed && !this->mavros_state->armed) {
-		// notify("armed");
+		this->apply_event_effect("armed");
 	} else if (!msg->armed && this->mavros_state->armed) {
-		// notify("disarmed");
+		this->apply_event_effect("disarmed");
 	} else if (msg->mode != this->mavros_state->mode) {
 		// mode changed
 		std::string mode = boost::algorithm::to_lower_copy(msg->mode);
@@ -183,6 +183,7 @@ void MavrosLEDController::handleMavrosState(const mavros_msgs::msg::State::Share
 		// if (ros::names::validate(mode, err)) {
 		// this->notify(mode);
 		// }
+        this->apply_event_effect(mode);
 	}
 	this->mavros_state = msg;
 }

@@ -39,22 +39,17 @@ class Effect {
 		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect)
 			:_effect(effect), _infinite(true){}
 
-		bool operator<(const Effect& other) {
-			return this->_effect->priority < other._effect->priority;
-		}
-
-		bool operator==(const Effect& other) {
-			return this->_effect->effect == other._effect->effect &&
-				   this->_effect->r == other._effect->r &&
-				   this->_effect->g == other._effect->g &&
-				   this->_effect->b == other._effect->b &&
-				   this->_effect->priority == other._effect->priority;
+		bool same(const std::shared_ptr<Effect> other) {
+			return this->_effect->effect == other->_effect->effect &&
+				   this->_effect->r == other->_effect->r &&
+				   this->_effect->g == other->_effect->g &&
+				   this->_effect->b == other->_effect->b;
 		}
 
 		void combine(const std::shared_ptr<Effect> other, rclcpp::Time curr_time) {
 			double duration = other->_effect->duration;
 			this->_effect = other->_effect;
-			if(duration == 0) {
+			if(duration < 1e-3) {
 				this->_infinite = true;
 			} else {
 				this->_end_time = curr_time + std::chrono::duration<double>(duration);
@@ -67,6 +62,14 @@ class Effect {
 
 		bool finished(rclcpp::Time curr_time) {
 			return !this->_infinite && curr_time > this->_end_time;
+		}
+
+		std::string to_string() {
+			return "Effect: " + this->_effect->effect 
+					+ ",(r:" + std::to_string(this->_effect->r)
+					+ ",g:" + std::to_string(this->_effect->g) 
+					+ ",b:" + std::to_string(this->_effect->b) + ")"
+					+ "[p:" + std::to_string(this->_effect->priority) + "]";
 		}
 
 		private:
@@ -167,6 +170,7 @@ CloverLEDController::CloverLEDController() :
 
 	// New values
 	this->base_effect = std::make_shared<Effect>(std::make_shared<clover_ros2::srv::SetLEDEffect::Request>());
+	this->curr_effect = this->base_effect;
 
     // First need to wait for service
     this->set_leds_srv = this->create_client<led_msgs::srv::SetLEDs>("set_leds");
@@ -278,15 +282,10 @@ void CloverLEDController::handleState(const led_msgs::msg::LEDStateArray::Shared
 
 void CloverLEDController::proceed()
 {
+
 	rclcpp::Time curr_time = this->now();
 
 	// Check for current most prioritised effect
-	// uint8_t p_idx = this->num_priority_levels - 1;
-	// std::shared_ptr<Effect> effect;
-	// for(auto it = this->pq.rbegin(); it != this->pq.rend(); ++it ) {
-	// 	if(*it){effect = *it; break;}
-	// 	p_idx--;
-	// }
 	auto ret = this->get_effect_queue();
 	std::shared_ptr<Effect> effect = ret.first;
 	uint8_t p_idx = ret.second;
@@ -305,9 +304,11 @@ void CloverLEDController::proceed()
 	}
 
 	// Check if effect is different from current effect
-	if(effect != this->curr_effect) {
+	if(!this->curr_effect->same(effect)) {
 		// Parse and set state for new effect
+		RCLCPP_INFO(this->get_logger(), "Effect change detected, changing effect to " + effect->to_string());
 		this->startEffect(effect);
+		this->curr_effect = effect;
 	}
 
 	// Execute effect
@@ -388,6 +389,11 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 {
     res->success = true;
 
+
+	// Set Defaults
+	if (req->effect == "") {req->effect = "fill";}
+	if (!req->brightness) {this->brightness = req->brightness;}
+
 	RCLCPP_INFO(
 		this->get_logger(), 
 		"Received led set effect: %s (r: %i, g: %i, b: %i) brightness: %i, duration: %f, notify: %s", 
@@ -412,9 +418,6 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 		return true;
 	}
 
-	// Set Defaults
-	if (req->effect == "") {req->effect = "fill";}
-	if (!req->brightness) {this->brightness = req->brightness;}
 
 	// Check valid effect first
 	bool found = (std::find(VALID_EFFECTS.begin(), VALID_EFFECTS.end(), req->effect) != VALID_EFFECTS.end());
@@ -426,19 +429,19 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 	// Special Case for flash
 	if(req->effect == "flash") {
-	auto _flash_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(this->flash_delay));
+		auto _flash_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(this->flash_delay));
 		for(int i = 0; i < this->flash_number; i++){
 			this->fill(req->r, req->g, req->b);
 			rclcpp::sleep_for(_flash_delay);
 			this->fill(0, 0, 0);
 			rclcpp::sleep_for(_flash_delay);
 		}
+		return true;
 	}
 
 	// Overwrite the effect at priority or add to priority list. 
 	rclcpp::Time curr_time;
 	std::shared_ptr<Effect> new_effect = std::make_shared<Effect>(req, this->now());
-	// this->pq[req->priority] = new_effect; 
 	this->set_effect_queue(req->priority, new_effect);
 		
 	return true;
