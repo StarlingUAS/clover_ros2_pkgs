@@ -179,10 +179,6 @@ void MavrosLEDController::handleMavrosState(const mavros_msgs::msg::State::Share
 			// remove the part before "."
 			mode = mode.substr(mode.find(".") + 1);
 		}
-		// std::string err;
-		// if (ros::names::validate(mode, err)) {
-		// this->notify(mode);
-		// }
         this->apply_event_effect(mode);
 	}
 	this->mavros_state = msg;

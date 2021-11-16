@@ -130,6 +130,8 @@ class CloverLEDController : public rclcpp::Node
         std::shared_ptr<mavros_msgs::msg::State> mavros_state;
         int counter;
 
+		rclcpp::CallbackGroup::SharedPtr callback_group_services_;
+
 		void restartTimer(double seconds);
 };
 
@@ -173,8 +175,11 @@ CloverLEDController::CloverLEDController() :
 	this->base_effect = std::make_shared<Effect>(std::make_shared<clover_ros2::srv::SetLEDEffect::Request>());
 	this->curr_effect = this->base_effect;
 
+	this->callback_group_services_ = this->create_callback_group(
+      rclcpp::CallbackGroupType::Reentrant);
+
     // First need to wait for service
-    this->set_leds_srv = this->create_client<led_msgs::srv::SetLEDs>("set_leds");
+    this->set_leds_srv = this->create_client<led_msgs::srv::SetLEDs>("set_leds", rmw_qos_profile_services_default, this->callback_group_services_);
     this->set_leds_srv->wait_for_service(10s);
 
     this->state_sub = this->create_subscription<led_msgs::msg::LEDStateArray>(
@@ -526,7 +531,10 @@ void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r, flo
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CloverLEDController>());
+	auto offboard = std::make_shared<CloverLEDController>();
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(offboard);
+    executor.spin();
     rclcpp::shutdown();
     return 0;
 }
