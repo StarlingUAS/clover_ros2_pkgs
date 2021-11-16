@@ -2,6 +2,8 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <mutex>
+#include <thread>
 #include <boost/algorithm/string.hpp>
 
 #include "rclcpp/rclcpp.hpp"
@@ -89,8 +91,13 @@ class CloverLEDController : public rclcpp::Node
 		bool startEffect(std::shared_ptr<Effect> effect);
 
     private:
+		std::pair<std::shared_ptr<Effect>, uint8_t> get_effect_queue();
+		void set_effect_queue(uint8_t p_idx, std::shared_ptr<Effect> effect);
+		void reset_queue();
+
 		std::shared_ptr<Effect> base_effect;
 		std::vector<std::shared_ptr<Effect>> pq;
+		std::mutex q_mutex;
 		
 		std::shared_ptr<Effect> curr_effect;
         std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
@@ -184,6 +191,27 @@ CloverLEDController::~CloverLEDController() {
 	this->setEffectRaw("", 0, 0, 0);
 }
 
+void CloverLEDController::set_effect_queue(uint8_t p_idx, std::shared_ptr<Effect> effect) {
+	std::lock_guard<std::mutex> guard(this->q_mutex);
+	this->pq[p_idx] = effect;
+}
+
+std::pair<std::shared_ptr<Effect>, uint8_t> CloverLEDController::get_effect_queue() {
+	std::lock_guard<std::mutex> guard(this->q_mutex);
+	uint8_t p_idx = this->num_priority_levels - 1;
+	std::shared_ptr<Effect> effect;
+	for(auto it = this->pq.rbegin(); it != this->pq.rend(); ++it ) {
+		if(*it){effect = *it; break;}
+		p_idx--;
+	}
+	return std::make_pair(effect, p_idx);
+}
+
+void CloverLEDController::reset_queue(){
+	std::lock_guard<std::mutex> guard(this->q_mutex);
+	std::fill(this->pq.begin(), this->pq.end(), nullptr); // Probably should lock this...
+}
+
 void CloverLEDController::restartTimer(double seconds) 
 {
 	if (this->timer) {
@@ -253,18 +281,23 @@ void CloverLEDController::proceed()
 	rclcpp::Time curr_time = this->now();
 
 	// Check for current most prioritised effect
-	uint8_t p_idx = this->num_priority_levels - 1;
-	std::shared_ptr<Effect> effect;
-	for(auto it = this->pq.rbegin(); it != this->pq.rend(); ++it ) {
-		if(*it){effect = *it; break;}
-		p_idx--;
-	}
+	// uint8_t p_idx = this->num_priority_levels - 1;
+	// std::shared_ptr<Effect> effect;
+	// for(auto it = this->pq.rbegin(); it != this->pq.rend(); ++it ) {
+	// 	if(*it){effect = *it; break;}
+	// 	p_idx--;
+	// }
+	auto ret = this->get_effect_queue();
+	std::shared_ptr<Effect> effect = ret.first;
+	uint8_t p_idx = ret.second;
+	
 
 	// Check if effect is found
 	if(effect) {
 		// Check if effect has expired, remove the effect from the queue
 		if(effect->finished(curr_time)) {
-			this->pq[p_idx] = nullptr;
+			// this->pq[p_idx] = nullptr;
+			this->set_effect_queue(p_idx, nullptr);
 		}
 	} else {
 		// If no effect found, set effect to base effect
@@ -374,7 +407,7 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 	// If 'base' set, set base and clear queue
 	if(req->base || req->effect=="reset") {
 		if(req->base){this->base_effect = std::make_shared<Effect>(req);}
-		std::fill(this->pq.begin(), this->pq.end(), nullptr); // Probably should lock this...
+		this->reset_queue();
 		res->message = "Queue emptied";
 		return true;
 	}
@@ -405,7 +438,8 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 	// Overwrite the effect at priority or add to priority list. 
 	rclcpp::Time curr_time;
 	std::shared_ptr<Effect> new_effect = std::make_shared<Effect>(req, this->now());
-	this->pq[req->priority] = new_effect; 
+	// this->pq[req->priority] = new_effect; 
+	this->set_effect_queue(req->priority, new_effect);
 		
 	return true;
 }
