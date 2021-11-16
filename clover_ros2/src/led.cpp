@@ -33,9 +33,6 @@ class Effect {
 		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect, rclcpp::Time curr_time)
 			:_effect(effect) {this->combine(std::make_shared<Effect>(effect), curr_time);}
 
-		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect, bool infinite)
-			:_effect(effect), _infinite(infinite){}
-
 		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect)
 			:_effect(effect), _infinite(true){}
 
@@ -236,8 +233,14 @@ void CloverLEDController::restartTimer(double seconds)
 
 void CloverLEDController::callSetLeds()
 {
-    // RCLCPP_INFO(this->get_logger(), "Sending LED Call request");
-	this->set_leds_srv->async_send_request(this->set_leds);
+    RCLCPP_INFO(this->get_logger(), "Sending LED Call request");
+	auto result_future = this->set_leds_srv->async_send_request(this->set_leds);
+	if (result_future.wait_for(std::chrono::duration<double>(10.0)) != std::future_status::ready)
+	{
+		RCLCPP_INFO(this->get_logger(), "LED Call request Failed");
+	} else {
+		RCLCPP_INFO(this->get_logger(), "LED Call request Succeded");
+	}
 }
 
 void CloverLEDController::set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b)
