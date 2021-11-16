@@ -114,6 +114,7 @@ class CloverLEDController : public rclcpp::Node
         bool blink_state;
 		int flash_number;
 
+		bool swap_red_blue;
 		bool notify_state;
 
 		uint32_t num_priority_levels;
@@ -150,8 +151,8 @@ CloverLEDController::CloverLEDController() :
 	this->get_parameter_or("flash_delay",this->flash_delay, 0.1);
 	this->get_parameter_or("flash_number",this->flash_number, 1);
 	this->get_parameter_or("rainbow_period",this->rainbow_period, 5.0);
-	this->get_parameter_or("brightness", this->brightness, 64.0);
-		// res->message = "Effect already set, skip";
+	this->get_parameter_or("swap_red_blue", this->swap_red_blue, true);
+	this->get_parameter_or("", this->brightness, 64.0);
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
 	this->get_parameter_or("num_priority_levels", this->num_priority_levels, 9U);
 
@@ -237,9 +238,15 @@ void CloverLEDController::callSetLeds()
 void CloverLEDController::set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b)
 {
 	this->set_leds->leds[i].index = index;
-	this->set_leds->leds[i].r = r;
+	if(this->swap_red_blue){
+		this->set_leds->leds[i].r = b;
+		this->set_leds->leds[i].b = r;
+	} else {
+		this->set_leds->leds[i].r = r;
+		this->set_leds->leds[i].b = b;
+	}
 	this->set_leds->leds[i].g = g;
-	this->set_leds->leds[i].b = b;
+	
 	this->set_leds->leds[i].brightness = this->brightness;
 }
 
@@ -443,7 +450,7 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 	rclcpp::Time curr_time;
 	std::shared_ptr<Effect> new_effect = std::make_shared<Effect>(req, this->now());
 	this->set_effect_queue(req->priority, new_effect);
-		
+	
 	return true;
 }
 
