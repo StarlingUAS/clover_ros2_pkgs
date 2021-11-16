@@ -62,11 +62,11 @@ class Effect {
 		}
 
 		std::string to_string() {
-			return "Effect: " + this->_effect->effect 
-					+ ",(r:" + std::to_string(this->_effect->r)
-					+ ",g:" + std::to_string(this->_effect->g) 
-					+ ",b:" + std::to_string(this->_effect->b) + ")"
-					+ "[p:" + std::to_string(this->_effect->priority) + "]";
+			return this->_effect->effect 
+					+ " (r:" + std::to_string(this->_effect->r)
+					+ ", g:" + std::to_string(this->_effect->g) 
+					+ ", b:" + std::to_string(this->_effect->b) + ")"
+					+ "[priority:" + std::to_string(this->_effect->priority) + "]";
 		}
 
 		private:
@@ -160,17 +160,13 @@ CloverLEDController::CloverLEDController() :
 	this->start_state = std::make_shared<led_msgs::msg::LEDStateArray>();
 	this->set_leds = std::make_shared<led_msgs::srv::SetLEDs::Request>();
 	this->current_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-	this->current_effect->effect = "";
-	this->current_effect->r = 0;
-	this->current_effect->g = 0;
-	this->current_effect->b = 0;
+	this->current_effect->effect = "rainbow";
 
 	// Resize Queue with all initialised to nullptr
 	this->pq.resize(this->num_priority_levels, nullptr);
 
 	// New values
 	this->base_effect = std::make_shared<Effect>(std::make_shared<clover_ros2::srv::SetLEDEffect::Request>());
-	this->curr_effect = this->base_effect;
 
 	this->callback_group_services_ = this->create_callback_group(
       rclcpp::CallbackGroupType::Reentrant);
@@ -319,7 +315,7 @@ void CloverLEDController::proceed()
 	}
 
 	// Check if effect is different from current effect
-	if(!this->curr_effect->same(effect)) {
+	if(!this->curr_effect || !this->curr_effect->same(effect)) {
 		// Parse and set state for new effect
 		RCLCPP_INFO(this->get_logger(), "Effect change detected, changing effect to " + effect->to_string());
 		this->startEffect(effect);
