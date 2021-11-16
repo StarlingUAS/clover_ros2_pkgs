@@ -166,7 +166,7 @@ CloverLEDController::CloverLEDController() :
 	this->pq.resize(this->num_priority_levels, nullptr);
 
 	// New values
-	this->base_effect = std::make_shared<Effect>(std::make_shared<clover_ros2::srv::SetLEDEffect::Request>());
+	this->base_effect = std::make_shared<Effect>(this->current_effect);
 
 	this->callback_group_services_ = this->create_callback_group(
       rclcpp::CallbackGroupType::Reentrant);
