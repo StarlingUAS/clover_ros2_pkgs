@@ -45,6 +45,11 @@ ament_target_dependencies(led
   rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs mavros_msgs)
 rosidl_target_interfaces(led ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+add_executable(mavros_led src/mavros_led.cpp)
+ament_target_dependencies(mavros_led
+  rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs mavros_msgs)
+rosidl_target_interfaces(mavros_led ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -66,6 +71,7 @@ install(DIRECTORY
 
 install(TARGETS
   led
+  mavros_led
   DESTINATION lib/${PROJECT_NAME}
 )
 

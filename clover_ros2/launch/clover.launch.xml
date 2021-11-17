@@ -3,6 +3,7 @@
 
     <arg name="led" default="true"/>
     <arg name="rangefinder_vl53l1x" default="true"/>
+    <arg name="mavros_notify_params_file" default="$(find-pkg-share clover_ros2)/config/notify_params.yaml"/>
 
     <!-- flag that we are operating on a simulated drone -->
     <arg name="simulator" default="false"/>
@@ -10,6 +11,12 @@
     <!-- Simple Offboard -->
     <include file="$(find-pkg-share simple_offboard)/launch/simple_offboard.launch.xml">
     </include>
+
+    <!-- high level led effects control, events notification with leds -->
+    <node pkg="clover_ros2" name="mavros_led" exec="mavros_led" ns="led" output="screen">
+        <!-- events effects table -->
+        <param from="$(var mavros_notify_params_file)"/>
+    </node>
 
     <!-- led strip -->
     <include file="$(find-pkg-share clover_ros2)/launch/led.launch.xml" if="$(var led)">

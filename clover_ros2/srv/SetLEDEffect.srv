@@ -2,9 +2,10 @@ string effect
 uint8 r
 uint8 g
 uint8 b
-float32 duration
-bool notify
 uint8 brightness
+float32 duration
+uint8 priority
+bool base 
 ---
 bool success
 string message
