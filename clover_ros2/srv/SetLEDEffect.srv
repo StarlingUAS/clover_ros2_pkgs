@@ -6,7 +6,6 @@ uint8 brightness
 float32 duration
 uint8 priority
 bool base 
-bool notify
 ---
 bool success
 string message

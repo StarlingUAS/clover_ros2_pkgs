@@ -113,7 +113,6 @@ class CloverLEDController : public rclcpp::Node
 		int flash_number;
 
 		bool swap_red_blue;
-		bool notify_state;
 
 		uint32_t num_priority_levels;
 
@@ -409,8 +408,8 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 	RCLCPP_INFO(
 		this->get_logger(), 
-		"Received led set effect: %s (r: %i, g: %i, b: %i) brightness: %i, duration: %f, notify: %s", 
-		req->effect.c_str(), req->r, req->g, req->b, req->brightness, req->duration, req->notify ? "true" : "false"
+		"Received led set effect: %s (r: %i, g: %i, b: %i) brightness: %i, duration: %f, priority %i", 
+		req->effect.c_str(), req->r, req->g, req->b, req->brightness, req->duration, req->priority
 	);
 
 	if(!req->priority) {
