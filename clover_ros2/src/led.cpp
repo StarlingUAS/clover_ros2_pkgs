@@ -108,11 +108,7 @@ class CloverLEDController : public rclcpp::Node
 		rclcpp::Time start_time;
 
         double blink_rate, blink_fast_rate, flash_delay, fade_period, wipe_period, rainbow_period;
-<<<<<<< HEAD
 		unsigned int default_brightness;
-=======
-		uint8_t default_brightness;
->>>>>>> 4b9b3eec6b7fa2d3843846b4b6863b435ddbe51c
         double low_battery_threshold;
         bool blink_state;
 		int flash_number;
@@ -157,11 +153,7 @@ CloverLEDController::CloverLEDController() :
 	this->get_parameter_or("flash_number",this->flash_number, 1);
 	this->get_parameter_or("rainbow_period",this->rainbow_period, 5.0);
 	this->get_parameter_or("swap_red_blue", this->swap_red_blue, true);
-<<<<<<< HEAD
 	this->get_parameter_or("brightness", this->default_brightness, 255U);
-=======
-	this->get_parameter_or("brightness", this->default_brightness, 255);
->>>>>>> 4b9b3eec6b7fa2d3843846b4b6863b435ddbe51c
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
 	this->get_parameter_or("num_priority_levels", this->num_priority_levels, 9U);
 
