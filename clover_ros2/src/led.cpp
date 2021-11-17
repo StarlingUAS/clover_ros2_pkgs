@@ -154,7 +154,7 @@ CloverLEDController::CloverLEDController() :
 	this->get_parameter_or("swap_red_blue", this->swap_red_blue, true);
 	this->get_parameter_or("brightness", this->default_brightness, 255U);
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
-	this->get_parameter_or("num_priority_levels", this->num_priority_levels, 9U);
+	this->get_parameter_or("num_priority_levels", this->num_priority_levels, 10U);
 
 	// Initialise set leds
 	this->state = std::make_shared<led_msgs::msg::LEDStateArray>();
