@@ -198,7 +198,7 @@ void MavrosLEDController::apply_event_effect(const string& event) {
     if(this->event_effect_map.find(event) != this->event_effect_map.end()) {
         ledeffect = this->event_effect_map[event];
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Event '%s' not found in parameter list, sending default", event);
+        RCLCPP_ERROR(this->get_logger(), "Event '%s' not found in parameter list, sending default", event.c_str());
         ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
         ledeffect->effect = "fill";
     }
@@ -243,6 +243,9 @@ void MavrosLEDController::check_connection_cb() {
         // Checks to do if connected
         if(this->now() - this->mavros_last_checked > this->mavros_timeout) {
             RCLCPP_WARN(this->get_logger(), "Lost MAVROS Connection");
+            auto ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+            ledeffect->effect = "reset";
+            this->send_effect(ledeffect);
             this->connected = false;
         }
     }
