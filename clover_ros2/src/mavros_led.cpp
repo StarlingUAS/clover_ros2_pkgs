@@ -198,9 +198,10 @@ void MavrosLEDController::apply_event_effect(const string& event) {
     if(this->event_effect_map.find(event) != this->event_effect_map.end()) {
         ledeffect = this->event_effect_map[event];
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Event '%s' not found in parameter list, sending default", event.c_str());
-        ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-        ledeffect->effect = "fill";
+        RCLCPP_ERROR(this->get_logger(), "Event '%s' not found in parameter list, not sending", event.c_str());
+        // ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+        // ledeffect->effect = "fill";
+        return;
     }
     RCLCPP_INFO(this->get_logger(), "Applying event effect: %s", event.c_str());
     this->send_effect(ledeffect);
