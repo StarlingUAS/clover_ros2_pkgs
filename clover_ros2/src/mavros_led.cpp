@@ -103,17 +103,16 @@ void MavrosLEDController::parse_event_params() {
         if(this->event_effect_map.find(name) == this->event_effect_map.end()) {
             // Name not found, create new
             ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+            ledeffect->effect = "fill"; // Default
             this->event_effect_map.insert(std::pair<string, clover_ros2::srv::SetLEDEffect::Request::SharedPtr>(name, ledeffect));
         } else {
             ledeffect = this->event_effect_map[name];
         }
 
+        RCLCPP_INFO(this->get_logger(), "Parsing name: %s, param: %s, effect: %s", name.c_str(), param.c_str(), kv.second.c_str());
+
         // Parse param into a SetLEDEffect service
-        if(param == "effect"){
-            ledeffect->effect = kv.second;
-        } else {
-            ledeffect->effect = "fill";
-        }
+        if(param == "effect"){ledeffect->effect = kv.second;} 
         if (param == "r") {ledeffect->r = stoi(kv.second);} 
         if (param == "b") {ledeffect->b = stoi(kv.second);}
         if (param == "g") {ledeffect->g = stoi(kv.second);} 
