@@ -86,7 +86,6 @@ class CloverLEDController : public rclcpp::Node
 		void set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t brightness);
         void proceed();
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
-		void setEffectRaw(std::string eff, int r, int g, int b, float brightness=255.0, float duration=-1.0, bool notify=false);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
 		bool startEffect(std::shared_ptr<Effect> effect);
 
@@ -194,7 +193,7 @@ CloverLEDController::CloverLEDController() :
 
 CloverLEDController::~CloverLEDController() {
 	// Destructor simply turns off lights.
-	this->setEffectRaw("", 0, 0, 0);
+	this->fill(0, 0, 0, 0);
 }
 
 void CloverLEDController::set_effect_queue(uint8_t p_idx, std::shared_ptr<Effect> effect) {
@@ -512,26 +511,6 @@ bool CloverLEDController::startEffect(std::shared_ptr<Effect> effect){
 
 	return true;
 }
-
-void CloverLEDController::setEffectRaw(std::string eff, int b, int g, int r, float brightness, float duration, bool notify)
-{
-	auto effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-	effect->effect = eff;
-	effect->r = r;
-	effect->g = g;
-	effect->b = b;
-
-	effect->brightness = brightness;
-
-	if(duration > 0.0) {
-		effect->duration = duration;
-	}
-	if(notify) {
-		effect->notify = notify;
-	}
-	this->setEffect(effect, std::make_shared<clover_ros2::srv::SetLEDEffect::Response>());
-}
-
 
 int main(int argc, char **argv)
 {
