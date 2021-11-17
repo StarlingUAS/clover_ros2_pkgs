@@ -101,6 +101,7 @@ class CloverLEDController : public rclcpp::Node
 		
 		std::shared_ptr<Effect> curr_effect;
         std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
+		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> default_base_effect;
         int led_count;
 
 		rclcpp::TimerBase::SharedPtr timer;
@@ -160,13 +161,14 @@ CloverLEDController::CloverLEDController() :
 	this->start_state = std::make_shared<led_msgs::msg::LEDStateArray>();
 	this->set_leds = std::make_shared<led_msgs::srv::SetLEDs::Request>();
 	this->current_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-	this->current_effect->effect = "rainbow";
 
 	// Resize Queue with all initialised to nullptr
 	this->pq.resize(this->num_priority_levels, nullptr);
 
 	// New values
-	this->base_effect = std::make_shared<Effect>(this->current_effect);
+	this->default_base_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+	this->default_base_effect->effect = "rainbow";
+	this->base_effect = std::make_shared<Effect>(this->default_base_effect);
 
 	this->callback_group_services_ = this->create_callback_group(
       rclcpp::CallbackGroupType::Reentrant);
@@ -229,13 +231,10 @@ void CloverLEDController::restartTimer(double seconds)
 
 void CloverLEDController::callSetLeds()
 {
-    RCLCPP_INFO(this->get_logger(), "Sending LED Call request");
 	auto result_future = this->set_leds_srv->async_send_request(this->set_leds);
 	if (result_future.wait_for(std::chrono::duration<double>(10.0)) != std::future_status::ready)
 	{
-		RCLCPP_INFO(this->get_logger(), "LED Call request Failed");
-	} else {
-		RCLCPP_INFO(this->get_logger(), "LED Call request Succeded");
+		RCLCPP_WARN(this->get_logger(), "LED Call request Failed");
 	}
 }
 
@@ -423,7 +422,11 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 	// If 'base' set, set base and clear queue
 	if(req->base || req->effect=="reset") {
+		// If base is set, base is set to the requested effect (even if empty)
 		if(req->base){this->base_effect = std::make_shared<Effect>(req);}
+		// If base is not set and the effect is 'reset', then base is set to default base.
+		else if(req->effect == "reset"){this->base_effect = std::make_shared<Effect>(this->default_base_effect);}
+		
 		this->reset_queue();
 		res->message = "Queue emptied";
 		return true;
