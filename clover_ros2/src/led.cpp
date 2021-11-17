@@ -168,6 +168,7 @@ CloverLEDController::CloverLEDController() :
 	// New values
 	this->default_base_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
 	this->default_base_effect->effect = "rainbow";
+	this->default_base_effect->brightness = this->default_brightness;
 	this->base_effect = std::make_shared<Effect>(this->default_base_effect);
 
 	this->callback_group_services_ = this->create_callback_group(
