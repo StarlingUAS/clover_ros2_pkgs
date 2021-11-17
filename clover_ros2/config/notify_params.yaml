@@ -4,13 +4,13 @@ mavros_led:
       no_mavros:
         effect: blink_fast
         b: "255"
-        priority: 9
-        duration: 0.1
+        priority: "9"
+        duration: "0.1"
       emergency_stop_topic:
         effect: blink_fast
         r: "255"
-        priority: 9
-        duration: 0.1
+        priority: "9"
+        duration: "0.1"
       acro: 
         b: "0"
         g: "155"
