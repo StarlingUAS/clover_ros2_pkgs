@@ -83,7 +83,7 @@ class CloverLEDController : public rclcpp::Node
         void callSetLeds();
         void rainbow(uint8_t n, uint8_t& r, uint8_t& g, uint8_t& b);
         void fill(uint8_t r, uint8_t g, uint8_t b);
-		void set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b);
+		void set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t brightness);
         void proceed();
         bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
 		void setEffectRaw(std::string eff, int r, int g, int b, float brightness=255.0, float duration=-1.0, bool notify=false);
@@ -107,7 +107,7 @@ class CloverLEDController : public rclcpp::Node
 		rclcpp::TimerBase::SharedPtr timer;
 		rclcpp::Time start_time;
 
-        double blink_rate, blink_fast_rate, brightness, flash_delay, fade_period, wipe_period, rainbow_period;
+        double blink_rate, blink_fast_rate, brightness, default_brightness, flash_delay, fade_period, wipe_period, rainbow_period;
         double low_battery_threshold;
         bool blink_state;
 		int flash_number;
@@ -152,7 +152,7 @@ CloverLEDController::CloverLEDController() :
 	this->get_parameter_or("flash_number",this->flash_number, 1);
 	this->get_parameter_or("rainbow_period",this->rainbow_period, 5.0);
 	this->get_parameter_or("swap_red_blue", this->swap_red_blue, true);
-	this->get_parameter_or("brightness", this->brightness, 64.0);
+	this->get_parameter_or("brightness", this->default_brightness, 64.0);
 	this->get_parameter_or("notify/low_battery/threshold", this->low_battery_threshold, 3.7);
 	this->get_parameter_or("num_priority_levels", this->num_priority_levels, 9U);
 
@@ -238,7 +238,7 @@ void CloverLEDController::callSetLeds()
 	}
 }
 
-void CloverLEDController::set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b)
+void CloverLEDController::set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t brightness)
 {
 	this->set_leds->leds[i].index = index;
 	if(this->swap_red_blue){
@@ -250,7 +250,7 @@ void CloverLEDController::set_leds_index(uint8_t i, uint8_t index, uint8_t r, ui
 	}
 	this->set_leds->leds[i].g = g;
 	
-	this->set_leds->leds[i].brightness = this->brightness;
+	this->set_leds->leds[i].brightness = brightness;
 }
 
 void CloverLEDController::rainbow(uint8_t n, uint8_t& r, uint8_t& g, uint8_t& b)
@@ -277,7 +277,7 @@ void CloverLEDController::fill(uint8_t r, uint8_t g, uint8_t b)
 	this->set_leds->leds.resize(this->led_count);
 	for (int i = 0; i < led_count; i++) {
 		this->set_leds_index(
-			i, i, r, g, b
+			i, i, r, g, b, this->brightness
 		);
 	}
 	this->callSetLeds();
@@ -350,7 +350,8 @@ void CloverLEDController::proceed()
 				i, i,
 				one_minus_passed * this->start_state->leds[i].r + passed * this->current_effect->r,
 				one_minus_passed * this->start_state->leds[i].g + passed * this->current_effect->g,
-				one_minus_passed * this->start_state->leds[i].b + passed * this->current_effect->b
+				one_minus_passed * this->start_state->leds[i].b + passed * this->current_effect->b,
+				one_minus_passed * this->start_state->leds[i].brightness + passed * this->current_effect->brightness
 			);
 		}
 		this->callSetLeds();
@@ -367,7 +368,8 @@ void CloverLEDController::proceed()
 			this->counter - 1,
 			this->current_effect->r,
 			this->current_effect->g,
-			this->current_effect->b
+			this->current_effect->b,
+			this->current_effect->brightness
 		);
 		this->callSetLeds();
 		if (this->counter == this->led_count) {
@@ -380,7 +382,7 @@ void CloverLEDController::proceed()
 		RCLCPP_DEBUG(this->get_logger(), "proceed: rainbow_fill");
 		this->rainbow(this->counter % 255, r, g, b);
 		for (int i = 0; i < this->led_count; i++) {
-			this->set_leds_index(i,i,r,g,b);
+			this->set_leds_index(i,i,r,g,b, this->current_effect->brightness);
 		}
 		this->callSetLeds();
 	}
@@ -389,7 +391,7 @@ void CloverLEDController::proceed()
 		for (int i = 0; i < this->led_count; i++) {
 			int pos = (int)round(this->counter + (255.0 * i / this->led_count)) % 255;
 			this->rainbow(pos % 255, r, g, b);
-			this->set_leds_index(i,i,r,g,b);
+			this->set_leds_index(i,i,r,g,b,this->current_effect->brightness);
 		}
 		this->callSetLeds();
 	}
@@ -402,7 +404,7 @@ bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffe
 
 	// Set Defaults
 	if (req->effect == "") {req->effect = "fill";}
-	if (!req->brightness) {this->brightness = req->brightness;}
+	if (!req->brightness) {req->brightness = this->default_brightness;}
 
 	RCLCPP_INFO(
 		this->get_logger(), 
@@ -506,6 +508,7 @@ bool CloverLEDController::startEffect(std::shared_ptr<Effect> effect){
 	this->counter = 0;
 	this->start_state = this->state;
 	this->start_time = this->now();
+	this->brightness = effect->get_effect()->brightness;
 
 	return true;
 }
