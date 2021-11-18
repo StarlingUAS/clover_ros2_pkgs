@@ -11,6 +11,16 @@
         r: "255"
         priority: "9"
         duration: "1"
+      armed:
+        effect: blink_fast
+        g: "150"
+        priority: "1"
+        duration: "5.0"
+      disarmed:
+        effect: blink_fast
+        r: "102"
+        priority: "1"
+        duration: "5.0"
       acro: 
         b: "0"
         g: "155"
@@ -19,13 +29,21 @@
         b: "40"
         g: "255"
         r: "255"
+      manual:
+        b: "40"
+        g: "100"
+        r: "200"
       connected: 
         effect: rainbow
+        duration: "5.0"
+        priority: "1"
       disconnected: 
         b: "50"
         effect: blink
         g: "50"
         r: "255"
+        duration: "5.0"
+        priority: "1"
       error: 
         b: "0"
         effect: flash
@@ -47,3 +65,8 @@
         b: "255"
         g: "255"
         r: "255"
+      auto.land:
+        effect: wipe
+        r: "153"
+        g: "153"
+

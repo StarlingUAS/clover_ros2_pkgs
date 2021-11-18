@@ -85,7 +85,7 @@ void MavrosLEDController::parse_event_params() {
     std::map<string, string> _event_colour_map; // Maps Mavros Event 
     this->get_parameters("events", _event_colour_map); // Params in format events.xxx.yyy
 
-    RCLCPP_INFO(this->get_logger(), "Parsing events");
+    // RCLCPP_INFO(this->get_logger(), "Parsing events");
     for (const auto& kv : _event_colour_map) {
         // RCLCPP_INFO(this->get_logger(), "events is %s: %s", kv.first.c_str(), kv.second.c_str());
         string name = "";
@@ -109,7 +109,7 @@ void MavrosLEDController::parse_event_params() {
             ledeffect = this->event_effect_map[name];
         }
 
-        RCLCPP_INFO(this->get_logger(), "Parsing name: %s, param: %s, effect: %s", name.c_str(), param.c_str(), kv.second.c_str());
+        // RCLCPP_INFO(this->get_logger(), "Parsing name: %s, param: %s, effect: %s", name.c_str(), param.c_str(), kv.second.c_str());
 
         // Parse param into a SetLEDEffect service
         if(param == "effect"){ledeffect->effect = kv.second;} 
