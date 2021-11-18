@@ -32,15 +32,15 @@ docker pull uobflightlabstarling/starling-clover:latest
 docker run -it --rm --name clover --network=host uobflightlabstarling/starling-clover
 ```
 
-This container also include mavros and will run `clover.launch.xml`. It is recommended that you run with `network=host` to enable ROS2 communication.
+This container also include mavros and will run `starling-clover.launch.xml`. It is recommended that you run with `network=host` to enable ROS2 communication.
 
-See [**Project Starling**](https://github.com/UoBFlightLab/ProjectStarling) for more details.
+See [**Project Starling**](https://github.com/StarlingUAS/ProjectStarling) for more details.
 
 ## Running
 
 Make sure the local setup is sourced: `source install/setup.bash`
 
-Everything can be run wiht the following:
+Everything can be run with the following:
 
 ```bash
 ros2 launch clover_ros2 clover.launch.xml
@@ -63,7 +63,7 @@ This is a port of some of the core source files of the clover packages. We only 
 ### *simple_offboard* Node
 This node is intended to simplify the programming of autonomous drone flight (`OFFBOARD` flight mode). It allows the setting of desired flight tasks and automatically transforms coordinates between frames. It is a high level system for interacting with the flight controller.
 
-This is a direct port of the `simple_offboard` module from the clover project. See the following documentation from [Coex](https://clover.coex.tech/en/simple_offboard.html).
+This is a modified port of the `simple_offboard` module from the clover project. See the following documentation from [Coex](https://clover.coex.tech/en/simple_offboard.html).
 
 It also provides a novel trajectory following node that is not included in the original clover project.
 
