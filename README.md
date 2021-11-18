@@ -122,8 +122,8 @@ It automatically attempts to subscribe to the `mavros/state` topic and sends LED
 * `no_mavros`: The watchdog continuously monitors the connectiong with mavros. If there has been no message from `mavros/state` within a timeout period, the `no_mavros` effect is played. By default this is a blue quick blink with a short duration with priority 9. 
 *  `base`: If a connection is found, the `base` effect is set as the base LED effect. By default this is set in the code to be a blue fill. 
 * `emergency_stop_topic`: If the emergency stop is triggered on `/emergency_stop`, this effect is triggered. By default is a red quick blink with a short duration with priority 9.
-* `armed`: Plays when the vehicle changes from disarmed to arm for 5 seconds
-* `disarmed`: Plays when vehicle changes from armed to disarm for 5 seconds
+* `armed`: Plays when the vehicle changes from disarmed to arm for 2 seconds
+* `disarmed`: Plays when vehicle changes from armed to disarm for 2 seconds
 * `manual`
 * `posctl`: Plays on position control mode
 * `offboard`: Plays on offboard control mode 

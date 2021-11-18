@@ -5,22 +5,24 @@
         effect: blink_fast
         b: "255"
         priority: "9"
-        duration: "1"
+        duration: "2"
       emergency_stop_topic:
         effect: blink_fast
         r: "255"
+        brightness: "255"
         priority: "9"
-        duration: "1"
+        duration: "2"
       armed:
         effect: blink_fast
         g: "150"
         priority: "1"
-        duration: "5.0"
+        duration: "2.0"
       disarmed:
         effect: blink_fast
+        g: "150"
         r: "102"
         priority: "1"
-        duration: "5.0"
+        duration: "2.0"
       acro: 
         b: "0"
         g: "155"
