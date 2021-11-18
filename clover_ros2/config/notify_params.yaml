@@ -67,6 +67,10 @@
         b: "255"
         g: "255"
         r: "255"
+      land:
+        effect: wipe
+        r: "153"
+        g: "153"
       auto.land:
         effect: wipe
         r: "153"
