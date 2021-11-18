@@ -143,7 +143,7 @@ void MavrosLEDController::parse_event_params() {
 void MavrosLEDController::emergency_stop() {
     // Send Emergency Stop Colour if specified, will stop itself once not pressed after 1 second. 
     if(this->event_effect_map.find("emergency_stop_topic") != this->event_effect_map.end()) {
-        this->apply_event_effect("emergenct_stop_topic");
+        this->apply_event_effect("emergency_stop_topic");
     } else {
         auto ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
         ledeffect->effect = "flash"; ledeffect->r = 255; 
