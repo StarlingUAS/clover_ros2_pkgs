@@ -9,8 +9,8 @@
     <arg name="simulator" default="false"/>
 
     <!-- Simple Offboard -->
-    <include file="$(find-pkg-share simple_offboard)/launch/simple_offboard.launch.xml">
-    </include>
+    <!-- <include file="$(find-pkg-share simple_offboard)/launch/simple_offboard.launch.xml">
+    </include> -->
 
     <!-- high level led effects control, events notification with leds -->
     <node pkg="clover_ros2" name="mavros_led" exec="mavros_led" ns="led" output="screen">
