@@ -54,21 +54,10 @@ ros2 launch clover_ros2 clover.launch.xml
 - **ws281x**: led drivers ros2 nodes from [ros_led](https://github.com/CopterExpress/ros_led) ported to ROS2
 - **ws281x_test** test package for ws281x drivers
 - **vl53l1x_ros2** rangefinder driver ros2 nodes from [vl53l1x_ros2](https://github.com/mhl787156/vl53l1x_ros2). Note that this is a git submodule. See the README in the module itself for further details.
-- **simple_offboard**: A basic [offboard controller](https://github.com/StarlingUAS/starling_simple_offboard) which is a ROS2 port of the clover simple_offboard controller. 
 
 ## Clover ROS2
 
 This is a port of some of the core source files of the clover packages. We only port the files which are relevant to the sensor. We do not need the control node as that is handled by mavros for us.
-
-### *simple_offboard* Node
-This node is intended to simplify the programming of autonomous drone flight (`OFFBOARD` flight mode). It allows the setting of desired flight tasks and automatically transforms coordinates between frames. It is a high level system for interacting with the flight controller.
-
-This is a modified port of the `simple_offboard` module from the clover project. See the following documentation from [Coex](https://clover.coex.tech/en/simple_offboard.html).
-
-It also provides a novel trajectory following node that is not included in the original clover project.
-
-See [simple_offboard docs](starling_simple_offboard) for further details
-
 ### *clover_led* Node
 This node controls higher level and more complex functionality of the led lights. It exposes the `set_effect` service which takes a clover `setLEDEffect` request message.
 
