@@ -1,6 +1,13 @@
 /**:
   ros__parameters:
     events: 
+      base:
+        effect: "fill"
+        b: "255"
+        base: "true"
+      loiter:
+        effect: "fill"
+        b: "255"
       no_mavros:
         effect: blink_fast
         b: "255"
@@ -68,10 +75,9 @@
         g: "255"
         r: "255"
       land:
-        effect: wipe
         r: "153"
         g: "153"
-      auto.land:
+      "[auto.land]":
         effect: wipe
         r: "153"
         g: "153"

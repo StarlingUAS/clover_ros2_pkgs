@@ -119,6 +119,7 @@ void MavrosLEDController::parse_event_params() {
         if (param == "brightness") {ledeffect->brightness = stoi(kv.second);}
         if (param == "priority") {ledeffect->priority = stoi(kv.second);}
         if (param == "duration") {ledeffect->duration = stof(kv.second);}
+        if (param == "base") {ledeffect->base = kv.second=="true";}
 
     }
     RCLCPP_INFO(this->get_logger(), "Parsed Effects from parameters:");   
