@@ -26,6 +26,7 @@ ARG START_HERE=blah
 COPY led_msgs /ros_ws/src/led_msgs
 COPY ws281x /ros_ws/src/ws281x
 COPY vl53l1x_ros2 /ros_ws/src/vl53l1x_ros2
+COPY clover_ros2_msgs /ros_ws/src/clover_ros2_msgs
 COPY clover_ros2 /ros_ws/src/clover_ros2
 COPY .git /ros_ws/src/.git
 COPY .gitmodules /ros_ws/src/.gitmodules
@@ -41,6 +42,7 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
         simple_offboard_msgs \
         ws281x \
         vl53l1x \
+        clover_ros2_msgs \
         clover_ros2 \
     && rm -r build
 

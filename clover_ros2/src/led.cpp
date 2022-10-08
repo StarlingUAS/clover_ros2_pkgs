@@ -7,7 +7,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "rclcpp/rclcpp.hpp"
-#include "clover_ros2/srv/set_led_effect.hpp"
+#include "clover_ros2_msgs/srv/set_led_effect.hpp"
 #include "led_msgs/srv/set_le_ds.hpp"
 #include "led_msgs/msg/led_state.hpp"
 #include "led_msgs/msg/led_state_array.hpp"
@@ -30,10 +30,10 @@ const std::vector<std::string> VALID_EFFECTS = {
 
 class Effect {
 	public:
-		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect, rclcpp::Time curr_time)
+		Effect(std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> effect, rclcpp::Time curr_time)
 			:_effect(effect) {this->combine(std::make_shared<Effect>(effect), curr_time);}
 
-		Effect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> effect)
+		Effect(std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> effect)
 			:_effect(effect), _infinite(true){}
 
 		bool same(const std::shared_ptr<Effect> other) {
@@ -53,7 +53,7 @@ class Effect {
 			}
 		}
 
-		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> get_effect() {
+		std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> get_effect() {
 			return this->_effect;
 		}
 
@@ -70,7 +70,7 @@ class Effect {
 		}
 
 		private:
-			std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> _effect;
+			std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> _effect;
 			rclcpp::Time _end_time;
 			bool _infinite = false;
 };
@@ -85,7 +85,7 @@ class CloverLEDController : public rclcpp::Node
         void fill(uint8_t r, uint8_t g, uint8_t b, uint8_t brightness);
 		void set_leds_index(uint8_t i, uint8_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t brightness);
         void proceed();
-        bool setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res);
+        bool setEffect(std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Response> res);
         void handleState(const led_msgs::msg::LEDStateArray::SharedPtr msg);
 		bool startEffect(std::shared_ptr<Effect> effect);
 
@@ -99,8 +99,8 @@ class CloverLEDController : public rclcpp::Node
 		std::mutex q_mutex;
 		
 		std::shared_ptr<Effect> curr_effect;
-        std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> current_effect;
-		std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> default_base_effect;
+        std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> current_effect;
+		std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> default_base_effect;
         int led_count;
 
 		rclcpp::TimerBase::SharedPtr timer;
@@ -121,7 +121,7 @@ class CloverLEDController : public rclcpp::Node
 
         rclcpp::Client<led_msgs::srv::SetLEDs>::SharedPtr set_leds_srv;
         rclcpp::Subscription<led_msgs::msg::LEDStateArray>::SharedPtr state_sub;
-        rclcpp::Service<clover_ros2::srv::SetLEDEffect>::SharedPtr set_effect;
+        rclcpp::Service<clover_ros2_msgs::srv::SetLEDEffect>::SharedPtr set_effect;
 
 		rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr mavros_state_sub;
         std::shared_ptr<mavros_msgs::msg::State> mavros_state;
@@ -159,13 +159,13 @@ CloverLEDController::CloverLEDController() :
 	this->state = std::make_shared<led_msgs::msg::LEDStateArray>();
 	this->start_state = std::make_shared<led_msgs::msg::LEDStateArray>();
 	this->set_leds = std::make_shared<led_msgs::srv::SetLEDs::Request>();
-	this->current_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+	this->current_effect = std::make_shared<clover_ros2_msgs::srv::SetLEDEffect::Request>();
 
 	// Resize Queue with all initialised to nullptr
 	this->pq.resize(this->num_priority_levels, nullptr);
 
 	// New values
-	this->default_base_effect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+	this->default_base_effect = std::make_shared<clover_ros2_msgs::srv::SetLEDEffect::Request>();
 	this->default_base_effect->effect = "rainbow";
 	this->default_base_effect->brightness = this->default_brightness;
 	this->base_effect = std::make_shared<Effect>(this->default_base_effect);
@@ -182,7 +182,7 @@ CloverLEDController::CloverLEDController() :
         std::bind(&CloverLEDController::handleState, this, std::placeholders::_1)
     );
 
-    this->set_effect = this->create_service<clover_ros2::srv::SetLEDEffect>(
+    this->set_effect = this->create_service<clover_ros2_msgs::srv::SetLEDEffect>(
         "set_effect",
         std::bind(&CloverLEDController::setEffect, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -397,7 +397,7 @@ void CloverLEDController::proceed()
 	}
 }
 
-bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2::srv::SetLEDEffect::Response> res)
+bool CloverLEDController::setEffect(std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Request> req, std::shared_ptr<clover_ros2_msgs::srv::SetLEDEffect::Response> res)
 {
     res->success = true;
 

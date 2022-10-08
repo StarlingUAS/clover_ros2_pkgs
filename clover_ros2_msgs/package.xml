@@ -5,11 +5,11 @@
   <version>0.0.9</version>
   <description>Messages for LEDs and LED strips (ROS2 Port)</description>
 
-  <maintainer email="okalachev@gmail.com">Oleg Kalachev</maintainer>
+  <maintainer email="mickey.li@bristol.ac.uk">Mickey Li</maintainer>
   <license>MIT</license>
-  <url type="website">https://github.com/CopterExpress/ros_led</url>
+  <url type="website">https://github.com/StarlingUAS/clover_ros2_pkgs</url>
 
-  <author email="okalachev@gmail.com">Oleg Kalachev</author>
+  <author email="mickey.li@bristol.ac.uk">Mickey Li</author>
   
   <buildtool_depend>ament_cmake</buildtool_depend>
 
