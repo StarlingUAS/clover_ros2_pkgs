@@ -22,7 +22,7 @@
     </node>
 
     <!-- high level led effects control, events notification with leds -->
-    <node pkg="clover_ros2" name="led_effect" exec="led" namespace="led" output="screen" if="$(var led_effect)">
+    <node pkg="clover_ros2" name="led_effect" exec="led" output="screen" if="$(var led_effect)">
         <param name="blink_rate" value="1.0"/>
         <param name="fade_period" value="0.5"/>
         <param name="rainbow_period" value="5.0"/>
