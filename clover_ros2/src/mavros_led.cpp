@@ -3,7 +3,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "rclcpp/rclcpp.hpp"
-#include "clover_ros2/srv/set_led_effect.hpp"
+#include "clover_ros2_msgs/srv/set_led_effect.hpp"
 
 // #include "sensor_msgs/msg/battery_state.h"
 #include "mavros_msgs/msg/state.hpp"
@@ -24,14 +24,14 @@ class MavrosLEDController: public rclcpp::Node
         void emergency_stop();
 
         void apply_event_effect(const string& event);
-        bool send_effect(const clover_ros2::srv::SetLEDEffect::Request::SharedPtr effect, bool wait=false);
+        bool send_effect(const clover_ros2_msgs::srv::SetLEDEffect::Request::SharedPtr effect, bool wait=false);
 
 
         // Parameters
-        std::map<string, clover_ros2::srv::SetLEDEffect::Request::SharedPtr> event_effect_map; // Maps Mavros Event 
+        std::map<string, clover_ros2_msgs::srv::SetLEDEffect::Request::SharedPtr> event_effect_map; // Maps Mavros Event 
 
         // Set Effect Service Client
-        rclcpp::Client<clover_ros2::srv::SetLEDEffect>::SharedPtr set_effect_client;
+        rclcpp::Client<clover_ros2_msgs::srv::SetLEDEffect>::SharedPtr set_effect_client;
 
         // Mavros State
         rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr mavros_state_sub;
@@ -61,7 +61,7 @@ MavrosLEDController::MavrosLEDController() :
     this->connection_check_rate = chrono::duration<double>(1.0/timeout);
 
     // Clients
-    this->set_effect_client = this->create_client<clover_ros2::srv::SetLEDEffect>("set_effect");
+    this->set_effect_client = this->create_client<clover_ros2_msgs::srv::SetLEDEffect>("set_effect");
     this->set_effect_client->wait_for_service(10s);
 
     // Subscribers
@@ -85,7 +85,7 @@ void MavrosLEDController::parse_event_params() {
     std::map<string, string> _event_colour_map; // Maps Mavros Event 
     this->get_parameters("events", _event_colour_map); // Params in format events.xxx.yyy
 
-    RCLCPP_INFO(this->get_logger(), "Parsing events");
+    // RCLCPP_INFO(this->get_logger(), "Parsing events");
     for (const auto& kv : _event_colour_map) {
         // RCLCPP_INFO(this->get_logger(), "events is %s: %s", kv.first.c_str(), kv.second.c_str());
         string name = "";
@@ -99,17 +99,17 @@ void MavrosLEDController::parse_event_params() {
         }
 
         // Insert or get reference to effect based on name
-        clover_ros2::srv::SetLEDEffect::Request::SharedPtr ledeffect;
+        clover_ros2_msgs::srv::SetLEDEffect::Request::SharedPtr ledeffect;
         if(this->event_effect_map.find(name) == this->event_effect_map.end()) {
             // Name not found, create new
-            ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+            ledeffect = std::make_shared<clover_ros2_msgs::srv::SetLEDEffect::Request>();
             ledeffect->effect = "fill"; // Default
-            this->event_effect_map.insert(std::pair<string, clover_ros2::srv::SetLEDEffect::Request::SharedPtr>(name, ledeffect));
+            this->event_effect_map.insert(std::pair<string, clover_ros2_msgs::srv::SetLEDEffect::Request::SharedPtr>(name, ledeffect));
         } else {
             ledeffect = this->event_effect_map[name];
         }
 
-        RCLCPP_INFO(this->get_logger(), "Parsing name: %s, param: %s, effect: %s", name.c_str(), param.c_str(), kv.second.c_str());
+        // RCLCPP_INFO(this->get_logger(), "Parsing name: %s, param: %s, effect: %s", name.c_str(), param.c_str(), kv.second.c_str());
 
         // Parse param into a SetLEDEffect service
         if(param == "effect"){ledeffect->effect = kv.second;} 
@@ -119,6 +119,7 @@ void MavrosLEDController::parse_event_params() {
         if (param == "brightness") {ledeffect->brightness = stoi(kv.second);}
         if (param == "priority") {ledeffect->priority = stoi(kv.second);}
         if (param == "duration") {ledeffect->duration = stof(kv.second);}
+        if (param == "base") {ledeffect->base = kv.second=="true";}
 
     }
     RCLCPP_INFO(this->get_logger(), "Parsed Effects from parameters:");   
@@ -143,9 +144,9 @@ void MavrosLEDController::parse_event_params() {
 void MavrosLEDController::emergency_stop() {
     // Send Emergency Stop Colour if specified, will stop itself once not pressed after 1 second. 
     if(this->event_effect_map.find("emergency_stop_topic") != this->event_effect_map.end()) {
-        this->apply_event_effect("emergenct_stop_topic");
+        this->apply_event_effect("emergency_stop_topic");
     } else {
-        auto ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+        auto ledeffect = std::make_shared<clover_ros2_msgs::srv::SetLEDEffect::Request>();
         ledeffect->effect = "flash"; ledeffect->r = 255; 
         this->send_effect(ledeffect);
     }
@@ -164,7 +165,7 @@ void MavrosLEDController::handleMavrosState(const mavros_msgs::msg::State::Share
         if(this->event_effect_map.find("base") != this->event_effect_map.end()) {
             this->apply_event_effect("base");
         } else {
-            auto ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
+            auto ledeffect = std::make_shared<clover_ros2_msgs::srv::SetLEDEffect::Request>();
             ledeffect->b = 255; ledeffect->base = true; ledeffect->effect = "fill";
             this->send_effect(ledeffect);
         }
@@ -194,19 +195,20 @@ void MavrosLEDController::handleMavrosState(const mavros_msgs::msg::State::Share
 
 void MavrosLEDController::apply_event_effect(const string& event) {
     // Insert or get reference to effect based on name
-    clover_ros2::srv::SetLEDEffect::Request::SharedPtr ledeffect;
+    clover_ros2_msgs::srv::SetLEDEffect::Request::SharedPtr ledeffect;
     if(this->event_effect_map.find(event) != this->event_effect_map.end()) {
         ledeffect = this->event_effect_map[event];
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Event '%s' not found in parameter list, sending default", event);
-        ledeffect = std::make_shared<clover_ros2::srv::SetLEDEffect::Request>();
-        ledeffect->effect = "fill";
+        RCLCPP_ERROR(this->get_logger(), "Event '%s' not found in parameter list, not sending", event.c_str());
+        // ledeffect = std::make_shared<clover_ros2_msgs::srv::SetLEDEffect::Request>();
+        // ledeffect->effect = "fill";
+        return;
     }
     RCLCPP_INFO(this->get_logger(), "Applying event effect: %s", event.c_str());
     this->send_effect(ledeffect);
 }
 
-bool MavrosLEDController::send_effect(const clover_ros2::srv::SetLEDEffect::Request::SharedPtr effect, bool wait) {
+bool MavrosLEDController::send_effect(const clover_ros2_msgs::srv::SetLEDEffect::Request::SharedPtr effect, bool wait) {
     try{
         while (!this->set_effect_client->wait_for_service(std::chrono::duration<int>(2))) {
             if (!rclcpp::ok()) {
@@ -243,6 +245,9 @@ void MavrosLEDController::check_connection_cb() {
         // Checks to do if connected
         if(this->now() - this->mavros_last_checked > this->mavros_timeout) {
             RCLCPP_WARN(this->get_logger(), "Lost MAVROS Connection");
+            auto ledeffect = std::make_shared<clover_ros2_msgs::srv::SetLEDEffect::Request>();
+            ledeffect->effect = "reset";
+            this->send_effect(ledeffect);
             this->connected = false;
         }
     }

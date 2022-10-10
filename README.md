@@ -32,15 +32,15 @@ docker pull uobflightlabstarling/starling-clover:latest
 docker run -it --rm --name clover --network=host uobflightlabstarling/starling-clover
 ```
 
-This container also include mavros and will run `clover.launch.xml`. It is recommended that you run with `network=host` to enable ROS2 communication.
+This container also include mavros and will run `starling-clover.launch.xml`. It is recommended that you run with `network=host` to enable ROS2 communication.
 
-See [**Project Starling**](https://github.com/UoBFlightLab/ProjectStarling) for more details.
+See [**Project Starling**](https://github.com/StarlingUAS/ProjectStarling) for more details.
 
 ## Running
 
 Make sure the local setup is sourced: `source install/setup.bash`
 
-Everything can be run wiht the following:
+Everything can be run with the following:
 
 ```bash
 ros2 launch clover_ros2 clover.launch.xml
@@ -58,27 +58,18 @@ ros2 launch clover_ros2 clover.launch.xml
 ## Clover ROS2
 
 This is a port of some of the core source files of the clover packages. We only port the files which are relevant to the sensor. We do not need the control node as that is handled by mavros for us.
-
-### *simple_offboard* Node
-This node is intended to simplify the programming of autonomous drone flight (`OFFBOARD` flight mode). It allows the setting of desired flight tasks and automatically transforms coordinates between frames. It is a high level system for interacting with the flight controller.
-
-This is a direct port of the `simple_offboard` module from the clover project. See the following documentation from [Coex](https://clover.coex.tech/en/simple_offboard.html).
-
-It also provides a novel trajectory following node that is not included in the original clover project.
-
-See [simple_offboard docs](starling_simple_offboard) for further details
-
 ### *clover_led* Node
-This node controls higher level and more complex functionality of the led lights. It exposes the `set_effect` service which takes a clover `setEffect` message.
+This node controls higher level and more complex functionality of the led lights. It exposes the `set_effect` service which takes a clover `setLEDEffect` request message.
 
 ```
 string effect
 uint8 r
 uint8 g
 uint8 b
-float32 duration
-bool notify
 uint8 brightness
+float32 duration
+uint8 priority
+bool base 
 ---
 bool success
 string message
@@ -94,16 +85,37 @@ where the `effect` parameter can be one of the following:
 - `flash`: flashes the colour `flash_number` amount of times with `flash_period` time inbetween. Then returns to previous effect if fill, fade or wipe
 - `rainbow_fill`: fills the leds with rainbow
 - `rainbow`: fills the led with rainbow
+- `reset`: A special parameter which resets the base effect to the default. 
 
-The `duration` parameter is in seconds and details the length of time an effect should last. Not specifying this parameter, or setting to 0.0 gives indefinite duration to the effect
+The `brightness` parameter (0 - 255) details the overall brightness of the effect. Defaults to 255 if not specified.
 
-The `brightness` parameter (0 - 255) details the overall brightness of the effect. Defaults to 70 if not specified.
+The `priority` is an integer, by default, from 0 to 9 (set by parameter `num_priority_levels`). The controller implements a unique-priority priority queue like structure. That looks a bit like the following (truncated to 5 levels rather than the actual 9):
 
-The `notify` parameter triggers the request as a notification. A notification will override the current effect with the notify effect for the duration specified. Once the duration is over, the previous effect will restart. By default, all notifies last 2 seconds and are set to maximum brightness unless otherwise specified.
+| Priority: | 0                 | 1 | 2 | 3 | 4              | 5 |
+|-----------|-------------------|---|---|---|----------------|---|
+| Effect:   | fill(100,100,100) |   |   |   | blink(255,0,0) |   |
 
-#### Mavros State
+For each priority level, there is only one saved effect. Sending a second effect of the same priority level as previous will overwrite the previous effect. Each loop the controller will select and play the highest priority 
+effect. If an effect has exceeded its duration it will be removed and the next highest selected. 
 
-This node automatically attempts to subscribe to the `mavros/state` topic. When a change in state (e.g. arm/disarm or mode) is detected, a notification of a given set of styles and colours is triggered. See the list of triggers in [`led.cpp`](clover_ros2/src/led.cpp#L416)
+The `base` parameter defines an effect as the base effect to be played if the queue is empty. This is useful for conveying a healthy connection or something similar. By default it is set as the `rainbow` effect. It can be reset by sending a `SetLEDEffect` request with `effect=reset`. Note if `base` is received the entire queue will be cleared. 
+
+The `duration` parameter is in seconds and details the length of time an effect should last. Not specifying this parameter, or setting to 0.0 gives indefinite duration to the effect.
+e 
+### *mavros_led* node
+
+This node is intended to be the drone watchdog node, monitoring the connection with mavros as well as other connections and conveying these states to the user through the LEDs. 
+
+It automatically attempts to subscribe to the `mavros/state` topic and sends LEDEffect requests based on the current state of the connection. The specific effects are given in the parameter file [notify_params.yaml](clover_ros2/config/notify_params.yaml). The following are the key effects:
+
+* `no_mavros`: The watchdog continuously monitors the connectiong with mavros. If there has been no message from `mavros/state` within a timeout period, the `no_mavros` effect is played. By default this is a blue quick blink with a short duration with priority 9. 
+*  `base`: If a connection is found, the `base` effect is set as the base LED effect. By default this is set in the code to be a blue fill. 
+* `emergency_stop_topic`: If the emergency stop is triggered on `/emergency_stop`, this effect is triggered. By default is a red quick blink with a short duration with priority 9.
+* `armed`: Plays when the vehicle changes from disarmed to arm for 2 seconds
+* `disarmed`: Plays when vehicle changes from armed to disarm for 2 seconds
+* `manual`
+* `posctl`: Plays on position control mode
+* `offboard`: Plays on offboard control mode 
 
 ## LED Control
 

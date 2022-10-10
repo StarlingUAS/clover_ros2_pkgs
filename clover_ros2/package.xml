@@ -8,14 +8,12 @@
 
   <license>MIT</license>
 
-  <url type="website">https://clover.coex.tech/</url>
+  <url type="website">https://github.com/starlinguas</url>
   <author email="okalachev@gmail.com">Oleg Kalachev</author>
   <author email="urpylka@gmail.com">Artem Smirnov</author>
+  <author email="mickey.li@bristol.ac.uk">Mickey Li</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <build_depend>rosidl_default_generators</build_depend>
-  <exec_depend>rosidl_default_runtime</exec_depend>
-  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <depend>rclcpp</depend>
   <depend>std_srvs</depend>
@@ -28,6 +26,7 @@
   <depend>ws281x</depend>
   <depend>vl53l1x</depend>
   <depend>mavros_msgs</depend>
+  <depend>clover_ros2_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

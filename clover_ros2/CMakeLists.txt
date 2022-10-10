@@ -28,27 +28,16 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosgraph_msgs REQUIRED)
 find_package(mavros_msgs REQUIRED)
+find_package(clover_ros2_msgs REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
-
-# Build Messages and Services
-find_package(rosidl_default_generators REQUIRED)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "srv/SetLEDEffect.srv"
-  "srv/Execute.srv"
-)
-ament_export_dependencies(rosidl_default_runtime)
-
 
 add_executable(led src/led.cpp)
 ament_target_dependencies(led
-  rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs mavros_msgs)
-rosidl_target_interfaces(led ${PROJECT_NAME} "rosidl_typesupport_cpp")
+  rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs mavros_msgs clover_ros2_msgs)
 
 add_executable(mavros_led src/mavros_led.cpp)
 ament_target_dependencies(mavros_led
-  rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs mavros_msgs)
-rosidl_target_interfaces(mavros_led ${PROJECT_NAME} "rosidl_typesupport_cpp")
+  rclcpp led_msgs std_msgs sensor_msgs rosgraph_msgs mavros_msgs clover_ros2_msgs)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
