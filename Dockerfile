@@ -1,6 +1,6 @@
 ARG VERSION=latest
 ARG REGISTRY
-FROM ${REGISTRY}uobflightlabstarling/starling-controller-base:${VERSION}
+FROM ${REGISTRY}uobflightlabstarling/starling-controller-base:pr-zenoh-2
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
