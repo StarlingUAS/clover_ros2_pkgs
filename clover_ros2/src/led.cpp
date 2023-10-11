@@ -316,7 +316,7 @@ void CloverLEDController::proceed()
 	// Check if effect is different from current effect
 	if(!this->curr_effect || !this->curr_effect->same(effect)) {
 		// Parse and set state for new effect
-		RCLCPP_INFO(this->get_logger(), "Effect change detected, changing effect to " + effect->to_string());
+		RCLCPP_INFO_STREAM(this->get_logger(), "Effect change detected, changing effect to " << effect->to_string());
 		this->startEffect(effect);
 		this->curr_effect = effect;
 	}
